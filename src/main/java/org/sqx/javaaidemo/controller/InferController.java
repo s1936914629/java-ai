@@ -45,7 +45,7 @@ public class InferController {
 	@PostMapping("/predict")
 	@Operation(summary = "上传图片进行图像分类", description = "接收一张图片，使用 ResNet50 模型进行推理，返回预测类别 ID、置信度和延迟时间")
 	@ApiResponse(responseCode = "200", description = "推理成功", content = @Content(mediaType = "application/json", schema = @Schema(implementation = PredictionResponse.class)))
-	public Map<String, Object> predict (@RequestParam("image") MultipartFile file) throws Exception {
+	public PredictionResponse predict (@RequestParam("image") MultipartFile file) throws Exception {
 		long start = System.currentTimeMillis();
 		BufferedImage img = ImageIO.read(file.getInputStream());
 		if (img == null) {
@@ -81,11 +81,11 @@ public class InferController {
 				}
 				// ============================================
 				long end = System.currentTimeMillis();
-				Map<String, Object> resp = new HashMap<>();
-				resp.put("class_id", maxIndex);
-				resp.put("score", maxProb);
-				resp.put("latency_ms", end - start);
-				return resp;
+				PredictionResponse result = new PredictionResponse();
+				result.setClassId(maxIndex);
+				result.setScore(maxProb);
+				result.setLatencyMs(end - start);
+				return result;
 			}
 		}
 	}
