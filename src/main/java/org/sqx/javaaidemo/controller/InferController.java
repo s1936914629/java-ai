@@ -34,7 +34,8 @@ public class InferController {
 	@PostConstruct
 	public void init () throws Exception {
 		env = OrtEnvironment.getEnvironment();
-		try (InputStream modelStream = new ClassPathResource("models/resnet50-v2-7.onnx").getInputStream()) {
+		// try (InputStream modelStream = new ClassPathResource("models/resnet50-v2-7.onnx").getInputStream()) {
+		try (InputStream modelStream = new ClassPathResource("models/iris_logreg.onnx").getInputStream()) {
 			byte[] modelBytes = modelStream.readAllBytes();
 			session = env.createSession(modelBytes, new OrtSession.SessionOptions());
 		}
