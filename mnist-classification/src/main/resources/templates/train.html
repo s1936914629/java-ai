@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型训练</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .status-card {
+            border-left: 4px solid #0d6efd;
+        }
+        .training-log {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+        }
+        .log-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .progress {
+            height: 25px;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/">MNIST识别系统</a>
+        <div class="navbar-nav">
+            <a class="nav-link" href="/">首页</a>
+            <a class="nav-link active" href="/train">模型训练</a>
+            <a class="nav-link" href="/predict">在线识别</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-5">
+    <h1 class="mb-4">模型训练管理</h1>
+
+    <!-- 模型状态 -->
+    <div class="card mb-4 status-card">
+        <div class="card-body">
+            <h5 class="card-title">模型状态</h5>
+            <div th:if="${trained}">
+                <span class="badge bg-success">已训练</span>
+                <p class="mt-2">模型已完成训练，可以用于识别任务</p>
+            </div>
+            <div th:unless="${trained}">
+                <span class="badge bg-warning">未训练</span>
+                <p class="mt-2">模型尚未训练，请点击下方按钮开始训练</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 训练控制 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">训练参数</h5>
+            <form id="trainForm">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="epochs" class="form-label">训练轮数</label>
+                        <input type="number" class="form-control" id="epochs" value="5" min="1" max="50">
+                        <div class="form-text">建议5-10轮，轮数越多训练时间越长</div>
+                    </div>
+                    <div class="col-md-8 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary me-2" onclick="startTraining()">
+                            <i class="bi bi-play-circle"></i> 开始训练
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="stopTraining()">
+                            <i class="bi bi-stop-circle"></i> 停止训练
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- 训练进度 -->
+            <div id="trainingProgress" class="mt-4" style="display: none;">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>训练进度</span>
+                    <span id="progressText">0%</span>
+                </div>
+                <div class="progress">
+                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                         style="width: 0%"></div>
+                </div>
+                <div class="mt-2 text-muted" id="timeEstimate"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 训练日志 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">训练日志</h5>
+            <div class="training-log" id="trainingLog">
+                <div class="log-item">等待训练开始...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 训练结果 -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">训练结果</h5>
+            <div id="trainingResult"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+<script>
+    let isTraining = false;
+
+    function startTraining() {
+        if (isTraining) {
+            alert('训练正在进行中...');
+            return;
+        }
+
+        const epochs = document.getElementById('epochs').value;
+        if (!epochs || epochs < 1) {
+            alert('请输入有效的训练轮数');
+            return;
+        }
+
+        isTraining = true;
+        const progressDiv = document.getElementById('trainingProgress');
+        progressDiv.style.display = 'block';
+
+        // 清空日志
+        document.getElementById('trainingLog').innerHTML = '';
+        addLog('开始训练模型...');
+
+        // 发送训练请求
+        fetch('/api/train?epochs=' + epochs, {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                isTraining = false;
+
+                if (data.success) {
+                    addLog('训练完成！');
+                    showTrainingResult(data);
+                } else {
+                    addLog('训练失败: ' + data.error);
+                    alert('训练失败: ' + data.error);
+                }
+
+                progressDiv.style.display = 'none';
+            })
+            .catch(error => {
+                isTraining = false;
+                progressDiv.style.display = 'none';
+                addLog('请求失败: ' + error);
+                alert('训练请求失败');
+            });
+
+        // 模拟进度更新
+        simulateProgress();
+    }
+
+    function stopTraining() {
+        if (!isTraining) {
+            alert('没有正在进行的训练');
+            return;
+        }
+
+        isTraining = false;
+        addLog('训练已停止');
+        alert('训练已停止');
+    }
+
+    function simulateProgress() {
+        if (!isTraining) return;
+
+        let progress = 0;
+        const interval = setInterval(() => {
+            if (!isTraining) {
+                clearInterval(interval);
+                return;
+            }
+
+            progress += Math.random() * 5;
+            if (progress > 95) progress = 95;
+
+            updateProgress(progress);
+
+            if (progress >= 100) {
+                clearInterval(interval);
+            }
+        }, 1000);
+    }
+
+    function updateProgress(percent) {
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+
+        progressBar.style.width = percent + '%';
+        progressText.textContent = Math.round(percent) + '%';
+    }
+
+    function addLog(message) {
+        const logDiv = document.getElementById('trainingLog');
+        const logItem = document.createElement('div');
+        logItem.className = 'log-item';
+        logItem.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+        logDiv.appendChild(logItem);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function showTrainingResult(data) {
+        const resultDiv = document.getElementById('trainingResult');
+        let html = `
+                <div class="alert alert-success">
+                    <h6><i class="bi bi-check-circle"></i> 训练成功完成！</h6>
+                    <p>训练时间: ${data.trainingTime} 秒</p>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h2 class="text-primary">${(data.accuracy * 100).toFixed(2)}%</h2>
+                                <p class="text-muted">准确率</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h2 class="text-success">${(data.precision * 100).toFixed(2)}%</h2>
+                                <p class="text-muted">精确率</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h2 class="text-warning">${(data.recall * 100).toFixed(2)}%</h2>
+                                <p class="text-muted">召回率</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h2 class="text-info">${(data.f1 * 100).toFixed(2)}%</h2>
+                                <p class="text-muted">F1分数</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <h6>混淆矩阵:</h6>
+                    <pre class="bg-light p-3">${data.confusionMatrix}</pre>
+                </div>
+            `;
+        resultDiv.innerHTML = html;
+    }
+</script>
+</body>
+</html>

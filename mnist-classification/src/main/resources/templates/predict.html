@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线识别</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .canvas-container {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            background: white;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        #drawCanvas {
+            display: block;
+        }
+        .result-card {
+            border: 2px solid #28a745;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { border-color: #28a745; }
+            50% { border-color: #20c997; }
+            100% { border-color: #28a745; }
+        }
+        .probability-bar {
+            height: 24px;
+            margin: 5px 0;
+            border-radius: 12px;
+            background: #f0f0f0;
+            overflow: hidden;
+        }
+        .probability-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.5s;
+        }
+        .digit-display {
+            font-size: 8rem;
+            font-weight: bold;
+            color: #0d6efd;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .brush-controls {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/">MNIST识别系统</a>
+        <div class="navbar-nav">
+            <a class="nav-link" href="/">首页</a>
+            <a class="nav-link" href="/train">模型训练</a>
+            <a class="nav-link active" href="/predict">在线识别</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-5">
+    <h1 class="mb-4">手写数字识别</h1>
+
+    <!-- 警告信息 -->
+    <div th:if="${not trained}" class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        模型尚未训练！请先到<a href="/train">训练页面</a>训练模型。
+    </div>
+
+    <div class="row">
+        <!-- 左侧：画板区域 -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">手写输入</h5>
+
+                    <!-- 画笔控制 -->
+                    <div class="brush-controls mb-3">
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="brushSize" class="form-label">画笔粗细</label>
+                                <input type="range" class="form-range" id="brushSize"
+                                       min="5" max="30" value="15">
+                            </div>
+                            <div class="col-6">
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-outline-danger" onclick="clearCanvas()">
+                                        <i class="bi bi-eraser"></i> 清空画板
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 画布 -->
+                    <div class="canvas-container mb-3">
+                        <canvas id="drawCanvas" width="280" height="280"></canvas>
+                    </div>
+
+                    <!-- 控制按钮 -->
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-lg" onclick="predict()">
+                            <i class="bi bi-search"></i> 识别数字
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="saveImage()">
+                            <i class="bi bi-download"></i> 保存图片
+                        </button>
+                    </div>
+
+                    <!-- 文件上传 -->
+                    <div class="mt-4">
+                        <label class="form-label">或上传图片识别</label>
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="imageUpload"
+                                   accept=".png,.jpg,.jpeg" onchange="uploadImage(this)">
+                            <button class="btn btn-outline-secondary" type="button"
+                                    onclick="document.getElementById('imageUpload').click()">
+                                <i class="bi bi-upload"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">支持PNG、JPG格式，图片将被自动调整为28x28像素</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：识别结果 -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">识别结果</h5>
+
+                    <!-- 预测数字 -->
+                    <div class="text-center mb-4">
+                        <div class="digit-display" id="predictionResult">?</div>
+                        <div class="text-muted" id="confidenceText">请在手写区书写数字</div>
+                    </div>
+
+                    <!-- 置信度分布 -->
+                    <div id="probabilitiesSection" style="display: none;">
+                        <h6>置信度分布</h6>
+                        <div id="probabilityBars"></div>
+                    </div>
+
+                    <!-- 处理后的图像预览 -->
+                    <div class="mt-4">
+                        <h6>处理后的图像</h6>
+                        <div class="text-center">
+                            <img id="processedImage" class="img-fluid"
+                                 style="image-rendering: pixelated; width: 112px;">
+                            <div class="form-text">28x28像素（放大显示）</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 使用说明 -->
+            <div class="card mt-4">
+                <div class="card-body">
+                    <h6><i class="bi bi-info-circle"></i> 使用说明</h6>
+                    <ul class="small">
+                        <li>在左侧画板上书写数字0-9</li>
+                        <li>点击"识别数字"按钮进行识别</li>
+                        <li>可使用滑块调整画笔粗细</li>
+                        <li>识别结果显示在右侧，包含置信度</li>
+                        <li>也可以直接上传数字图片进行识别</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+<script>
+    // 画板相关变量
+    let canvas = document.getElementById('drawCanvas');
+    let ctx = canvas.getContext('2d');
+    let drawing = false;
+    let brushSize = 15;
+
+    // 初始化画板
+    function initCanvas() {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'black';
+
+        // 鼠标事件
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // 触摸事件
+        canvas.addEventListener('touchstart', handleTouch);
+        canvas.addEventListener('touchmove', handleTouch);
+        canvas.addEventListener('touchend', stopDrawing);
+
+        // 画笔大小控制
+        document.getElementById('brushSize').addEventListener('input', function(e) {
+            brushSize = e.target.value;
+        });
+    }
+
+    function handleTouch(e) {
+        e.preventDefault();
+        if (e.type === 'touchstart') {
+            let touch = e.touches[0];
+            let mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        } else if (e.type === 'touchmove') {
+            let touch = e.touches[0];
+            let mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        }
+    }
+
+    function startDrawing(e) {
+        drawing = true;
+        draw(e);
+    }
+
+    function draw(e) {
+        if (!drawing) return;
+
+        ctx.lineWidth = brushSize;
+
+        let rect = canvas.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+
+        if (e.type === 'touchmove') {
+            let touch = e.touches[0];
+            x = touch.clientX - rect.left;
+            y = touch.clientY - rect.top;
+        }
+
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+    }
+
+    function stopDrawing() {
+        drawing = false;
+        ctx.beginPath();
+    }
+
+    function clearCanvas() {
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        document.getElementById('predictionResult').textContent = '?';
+        document.getElementById('confidenceText').textContent = '请在手写区书写数字';
+        document.getElementById('probabilitiesSection').style.display = 'none';
+    }
+
+    async function predict() {
+        // 获取画布图像数据
+        let imageData = canvas.toDataURL('image/png');
+
+        try {
+            // 显示加载状态
+            document.getElementById('predictionResult').textContent = '...';
+            document.getElementById('confidenceText').textContent = '识别中...';
+
+            // 发送预测请求
+            let response = await fetch('/api/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'image=' + encodeURIComponent(imageData)
+            });
+
+            let result = await response.json();
+
+            if (result.success) {
+                // 显示预测结果
+                document.getElementById('predictionResult').textContent = result.prediction;
+
+                // 显示置信度
+                let maxProb = Math.max(...result.probabilities);
+                document.getElementById('confidenceText').textContent =
+                    `置信度: ${(maxProb * 100).toFixed(2)}%`;
+
+                // 显示概率分布
+                showProbabilityBars(result.probabilities);
+
+                // 显示处理后的图像预览
+                showProcessedImage(imageData);
+
+            } else {
+                document.getElementById('predictionResult').textContent = '错误';
+                document.getElementById('confidenceText').textContent = result.error;
+            }
+
+        } catch (error) {
+            document.getElementById('predictionResult').textContent = '错误';
+            document.getElementById('confidenceText').textContent = '请求失败';
+            console.error('预测失败:', error);
+        }
+    }
+
+    function showProbabilityBars(probabilities) {
+        let barsDiv = document.getElementById('probabilityBars');
+        barsDiv.innerHTML = '';
+
+        probabilities.forEach((prob, index) => {
+            let percentage = (prob * 100).toFixed(1);
+            let isMax = prob === Math.max(...probabilities);
+
+            let barHTML = `
+                    <div class="row align-items-center mb-2">
+                        <div class="col-1">
+                            <span class="badge ${isMax ? 'bg-success' : 'bg-secondary'}">
+                                ${index}
+                            </span>
+                        </div>
+                        <div class="col-9">
+                            <div class="probability-bar">
+                                <div class="probability-fill"
+                                     style="width: ${percentage}%"></div>
+                            </div>
+                        </div>
+                        <div class="col-2">
+                            <small>${percentage}%</small>
+                        </div>
+                    </div>
+                `;
+            barsDiv.innerHTML += barHTML;
+        });
+
+        document.getElementById('probabilitiesSection').style.display = 'block';
+    }
+
+    function showProcessedImage(imageData) {
+        // 创建临时图像显示处理后的效果
+        let img = new Image();
+        img.onload = function() {
+            // 创建缩小版的canvas
+            let tempCanvas = document.createElement('canvas');
+            let tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = 28;
+            tempCanvas.height = 28;
+
+            // 绘制并缩小
+            tempCtx.drawImage(img, 0, 0, 28, 28);
+
+            // 像素化处理
+            let processedImg = document.getElementById('processedImage');
+            processedImg.src = tempCanvas.toDataURL();
+        };
+        img.src = imageData;
+    }
+
+    async function uploadImage(input) {
+        if (!input.files[0]) return;
+
+        let file = input.files[0];
+        let formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            document.getElementById('predictionResult').textContent = '...';
+            document.getElementById('confidenceText').textContent = '上传识别中...';
+
+            let response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            let result = await response.json();
+
+            if (result.success) {
+                // 显示结果
+                document.getElementById('predictionResult').textContent = result.prediction;
+                let maxProb = Math.max(...result.probabilities);
+                document.getElementById('confidenceText').textContent =
+                    `置信度: ${(maxProb * 100).toFixed(2)}%`;
+
+                // 显示概率分布
+                showProbabilityBars(result.probabilities);
+
+                // 清空画板并显示上传的图片
+                clearCanvas();
+                let img = new Image();
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    showProcessedImage(canvas.toDataURL());
+                };
+                img.src = URL.createObjectURL(file);
+
+            } else {
+                alert('上传识别失败: ' + result.error);
+            }
+
+        } catch (error) {
+            alert('上传失败: ' + error);
+        }
+
+        // 清空文件输入
+        input.value = '';
+    }
+
+    function saveImage() {
+        let link = document.createElement('a');
+        link.download = 'mnist_digit_' + new Date().getTime() + '.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    }
+
+    // 页面加载完成后初始化
+    window.onload = function() {
+        initCanvas();
+    };
+</script>
+</body>
+</html>
