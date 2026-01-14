@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端AI SDK演示</title>
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        #imagePreview {
+            width: 300px;
+            height: 300px;
+            border: 1px solid #ccc;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        #imagePreview img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .success {
+            background-color: #e8f5e9;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .loading {
+            background-color: #e3f2fd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>前端AI SDK演示</h1>
+        <p>不依赖后端服务，直接在浏览器中运行ResNet50模型</p>
+        
+        <div class="input-group">
+            <label for="imageFile">选择图片:</label>
+            <input type="file" id="imageFile" accept="image/*">
+        </div>
+        
+        <div id="imagePreview">
+            <span>预览区域</span>
+        </div>
+        
+        <button class="button" id="predictBtn" disabled>初始化模型...</button>
+        
+        <div id="result">
+            <h3>状态</h3>
+            <div id="status">正在加载模型...</div>
+        </div>
+    </div>
+
+    <script>
+        // 前端AI SDK实现
+        class AISDK {
+            constructor() {
+                this.session = null;
+                this.modelPath = 'http://localhost:8081/models/resnet50-v2-7.onnx'; // 模型文件路径
+                this.inputWidth = 224;
+                this.inputHeight = 224;
+                this.means = [0.485, 0.456, 0.406];
+                this.stds = [0.229, 0.224, 0.225];
+            }
+
+            // 初始化SDK，加载模型
+            async initialize() {
+                try {
+                    // 创建ONNX运行时会话
+                    this.session = await ort.InferenceSession.create(this.modelPath);
+                    return true;
+                } catch (error) {
+                    console.error('模型加载失败:', error);
+                    throw new Error('模型加载失败: ' + error.message);
+                }
+            }
+
+            // 图像预处理
+            preprocess(image) {
+                // 创建Canvas用于图像操作
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 调整图片大小
+                canvas.width = this.inputWidth;
+                canvas.height = this.inputHeight;
+                ctx.drawImage(image, 0, 0, this.inputWidth, this.inputHeight);
+                
+                // 获取像素数据
+                const imageData = ctx.getImageData(0, 0, this.inputWidth, this.inputHeight);
+                const data = imageData.data;
+                
+                // 转换为float数组并进行归一化
+                const input = new Float32Array(3 * this.inputWidth * this.inputHeight);
+                
+                for (let y = 0; y < this.inputHeight; y++) {
+                    for (let x = 0; x < this.inputWidth; x++) {
+                        const index = (y * this.inputWidth + x) * 4;
+                        
+                        // 获取RGB值并归一化
+                        const r = (data[index] / 255.0 - this.means[0]) / this.stds[0];
+                        const g = (data[index + 1] / 255.0 - this.means[1]) / this.stds[1];
+                        const b = (data[index + 2] / 255.0 - this.means[2]) / this.stds[2];
+                        
+                        // 按照ONNX模型的输入格式排列：[batch, channel, height, width]
+                        // 这里batch=1，channel=3
+                        input[y * this.inputWidth + x] = r; // R通道
+                        input[this.inputWidth * this.inputHeight + y * this.inputWidth + x] = g; // G通道
+                        input[2 * this.inputWidth * this.inputHeight + y * this.inputWidth + x] = b; // B通道
+                    }
+                }
+                
+                return input;
+            }
+
+            // Softmax函数
+            softmax(logits) {
+                const max = Math.max(...logits);
+                const exps = logits.map(logit => Math.exp(logit - max));
+                const sum = exps.reduce((a, b) => a + b, 0);
+                return exps.map(exp => exp / sum);
+            }
+
+            // 进行推理
+            async predict(image) {
+                if (!this.session) {
+                    throw new Error('SDK未初始化，请先调用initialize()');
+                }
+
+                const startTime = performance.now();
+                
+                // 图像预处理
+                const input = this.preprocess(image);
+                
+                // 创建ONNX输入张量
+                const tensor = new ort.Tensor('float32', input, [1, 3, this.inputHeight, this.inputWidth]);
+                
+                // 进行推理
+                const outputs = await this.session.run({ 'data': tensor });
+                
+                // 获取输出结果
+                const logits = outputs[outputs.keys().next().value].data;
+                
+                // 计算Softmax
+                const probabilities = this.softmax(logits);
+                
+                // 找到最大概率的类别
+                let maxIndex = 0;
+                let maxProb = probabilities[0];
+                for (let i = 1; i < probabilities.length; i++) {
+                    if (probabilities[i] > maxProb) {
+                        maxProb = probabilities[i];
+                        maxIndex = i;
+                    }
+                }
+                
+                const endTime = performance.now();
+                const latencyMs = Math.round(endTime - startTime);
+                
+                // 返回结果
+                return {
+                    classId: maxIndex,
+                    score: maxProb,
+                    latencyMs: latencyMs
+                };
+            }
+
+            // 释放资源
+            close() {
+                if (this.session) {
+                    this.session.dispose();
+                    this.session = null;
+                }
+            }
+        }
+
+        // 简单的ImageNet类别映射（前500个）
+        function getImageNetClassName(classId) {
+            const classNames = [
+                "background",
+                "tench, Tinca tinca",
+                "goldfish, Carassius auratus",
+                "great white shark, white shark, man-eater, man-eating shark, Carcharodon carcharias",
+                "tiger shark, Galeocerdo cuvieri",
+                "hammerhead, hammerhead shark",
+                "electric ray, crampfish, numbfish, torpedo",
+                "stingray",
+                "cock",
+                "hen",
+                "ostrich, Struthio camelus",
+                "brambling, Fringilla montifringilla",
+                "goldfinch, Carduelis carduelis",
+                "house finch, linnet, Carpodacus mexicanus",
+                "junco, snowbird",
+                "indigo bunting, indigo finch, indigo bird, Passerina cyanea",
+                "robin, American robin, Turdus migratorius",
+                "bulbul",
+                "jay",
+                "magpie",
+                "chickadee",
+                "water ouzel, dipper",
+                "kite",
+                "bald eagle, American eagle, Haliaeetus leucocephalus",
+                "vulture",
+                "great grey owl, great gray owl, Strix nebulosa",
+                "European fire salamander, Salamandra salamandra",
+                "common newt, Triturus vulgaris",
+                "eft",
+                "spotted salamander, Ambystoma maculatum",
+                "axolotl, mud puppy, Ambystoma mexicanum",
+                "bullfrog, Rana catesbeiana",
+                "tree frog, tree-frog",
+                "tailed frog, bell toad, ribbed toad, tailed toad, Ascaphus trui",
+                "loggerhead, loggerhead turtle, Caretta caretta",
+                "leatherback turtle, leatherback, leathery turtle, Dermochelys coriacea",
+                "mud turtle",
+                "terrapin",
+                "box turtle, box tortoise",
+                "banded gecko",
+                "common iguana, iguana, Iguana iguana",
+                "American chameleon, anole, Anolis carolinensis",
+                "whiptail, whiptail lizard",
+                "agama",
+                "frilled lizard, Chlamydosaurus kingi",
+                "alligator lizard",
+                "Gila monster, Heloderma suspectum",
+                "green lizard, Lacerta viridis",
+                "African chameleon, Chamaeleo chamaeleon",
+                "Komodo dragon, Komodo lizard, dragon lizard, giant lizard, Varanus komodoensis",
+                "African crocodile, Nile crocodile, Crocodylus niloticus",
+                "American alligator, Alligator mississipiensis",
+                "triceratops",
+                "thunder snake, worm snake, Carphophis amoenus",
+                "ringneck snake, ring-necked snake, ring snake",
+                "hognose snake, puff adder, sand viper",
+                "green snake, grass snake",
+                "king snake, kingsnake",
+                "garter snake, grass snake",
+                "water snake",
+                "vine snake",
+                "night snake, Hypsiglena torquata",
+                "boa constrictor, Constrictor constrictor",
+                "rock python, rock snake, Python sebae",
+                "Indian cobra, Naja naja",
+                "green mamba",
+                "sea snake",
+                "horned viper, cerastes, sand viper, horned asp, Cerastes cornutus",
+                "diamondback, diamondback rattlesnake, Crotalus adamanteus",
+                "sidewinder, horned rattlesnake, Crotalus cerastes",
+                "trilobite",
+                "harvestman, daddy longlegs, Phalangium opilio",
+                "scorpion",
+                "black and gold garden spider, Argiope aurantia",
+                "barn spider, Araneus cavaticus",
+                "garden spider, Aranea diademata",
+                "black widow, Latrodectus mactans",
+                "tarantula",
+                "wolf spider, hunting spider",
+                "tick",
+                "centipede",
+                "black grouse",
+                "ptarmigan",
+                "ruffed grouse, partridge, Bonasa umbellus",
+                "prairie chicken, prairie grouse, prairie fowl",
+                "peacock",
+                "quail",
+                "partridge",
+                "African grey, African gray, Psittacus erithacus",
+                "macaw",
+                "sulphur-crested cockatoo, Kakatoe galerita, Cacatua galerita",
+                "lorikeet",
+                "coucal",
+                "bee eater",
+                "hornbill",
+                "hummingbird",
+                "jacamar",
+                "toucan",
+                "drake",
+                "red-breasted merganser, Mergus serrator",
+                "goose",
+                "black swan, Cygnus atratus",
+                "tusker",
+                "echidna, spiny anteater, anteater",
+                "platypus, duckbill, duckbilled platypus, duck-billed platypus, Ornithorhynchus anatinus",
+                "wallaby, brush kangaroo",
+                "koala, koala bear, kangaroo bear, native bear, Phascolarctos cinereus",
+                "wombat",
+                "jellyfish",
+                "sea anemone, anemone",
+                "brain coral",
+                "flatworm, platyhelminth",
+                "nematode, nematode worm, roundworm",
+                "conch",
+                "snail",
+                "slug",
+                "sea slug, nudibranch",
+                "chiton, coat-of-mail shell, sea cradle, polyplacophore",
+                "chambered nautilus, pearly nautilus, nautilus",
+                "Dungeness crab, Cancer magister",
+                "rock crab, Cancer irroratus",
+                "fiddler crab",
+                "king crab, Alaska crab, Alaskan king crab, Alaska king crab, Paralithodes camtschatica",
+                "American lobster, Northern lobster, Maine lobster, Homarus americanus",
+                "spiny lobster, langouste, rock lobster, crawfish, crayfish, sea crawfish",
+                "crayfish, crawfish, crawdad, crawdaddy",
+                "hermit crab",
+                "isopod",
+                "white stork, Ciconia ciconia",
+                "black stork, Ciconia nigra",
+                "spoonbill",
+                "flamingo",
+                "little blue heron, Egretta caerulea",
+                "American egret, great white heron, Egretta albus",
+                "bittern",
+                "crane",
+                "limpkin, Aramus pictus",
+                "European gallinule, Porphyrio porphyrio",
+                "American coot, marsh hen, mud hen, water hen, Fulica americana",
+                "bustard",
+                "ruddy turnstone, Arenaria interpres",
+                "red-backed sandpiper, dunlin, Erolia alpina",
+                "redshank, Tringa totanus",
+                "dowitcher",
+                "oystercatcher, oyster catcher",
+                "pelican",
+                "king penguin, Aptenodytes patagonica",
+                "albatross, mollymawk",
+                "grey whale, gray whale, devilfish, Eschrichtius gibbosus, Eschrichtius robustus",
+                "killer whale, killer, orca, grampus, sea wolf, Orcinus orca",
+                "dugong, Dugong dugon",
+                "sea lion",
+                "Chihuahua",
+                "Japanese spaniel",
+                "Maltese dog, Maltese terrier, Maltese",
+                "Pekinese, Pekingese, Peke",
+                "Shih-Tzu",
+                "Blenheim spaniel",
+                "papillon",
+                "toy terrier",
+                "Rhodesian ridgeback",
+                "Afghan hound, Afghan",
+                "basset, basset hound",
+                "beagle",
+                "bloodhound, sleuthhound",
+                "bluetick",
+                "black-and-tan coonhound",
+                "Walker hound, Walker foxhound",
+                "English foxhound",
+                "redbone",
+                "borzoi, Russian wolfhound",
+                "Irish wolfhound",
+                "Italian greyhound",
+                "whippet",
+                "Ibizan hound, Ibizan Podenco",
+                "Norwegian elkhound, elkhound",
+                "otterhound, otter hound",
+                "Saluki, gazelle hound",
+                "Scottish deerhound, deerhound",
+                "Weimaraner",
+                "Staffordshire bullterrier, Staffordshire bull terrier",
+                "American Staffordshire terrier, Staffordshire terrier, American pit bull terrier, pit bull terrier",
+                "Bedlington terrier",
+                "Border terrier",
+                "Kerry blue terrier",
+                "Irish terrier",
+                "Norfolk terrier",
+                "Norwich terrier",
+                "Yorkshire terrier",
+                "Wire-haired fox terrier",
+                "Lakeland terrier",
+                "Sealyham terrier, Sealyham",
+                "Airedale, Airedale terrier",
+                "cairn, cairn terrier",
+                "Australian terrier",
+                "Dandie Dinmont, Dandie Dinmont terrier",
+                "Boston bull, Boston terrier",
+                "miniature schnauzer",
+                "giant schnauzer",
+                "standard schnauzer",
+                "Scotch terrier, Scottish terrier, Scottie",
+                "Tibetan terrier, chrysanthemum dog",
+                "silky terrier, Sydney silky",
+                "soft-coated wheaten terrier",
+                "West Highland white terrier",
+                "Lhasa, Lhasa apso",
+                "flat-coated retriever",
+                "curly-coated retriever",
+                "golden retriever",
+                "Labrador retriever",
+                "Chesapeake Bay retriever",
+                "German short-haired pointer",
+                "vizsla, Hungarian pointer",
+                "English setter",
+                "Irish setter, red setter",
+                "Gordon setter",
+                "Brittany spaniel",
+                "clumber, clumber spaniel",
+                "English springer, English springer spaniel",
+                "Welsh springer spaniel",
+                "cocker spaniel, English cocker spaniel, cocker",
+                "Sussex spaniel",
+                "Irish water spaniel",
+                "kuvasz",
+                "schipperke",
+                "groenendael",
+                "malinois",
+                "briard",
+                "kelpie",
+                "komondor",
+                "Old English sheepdog, bobtail",
+                "Shetland sheepdog, Shetland sheep dog, Shetland",
+                "collie",
+                "Border collie",
+                "Bouvier des Flandres, Bouviers des Flandres",
+                "Rottweiler",
+                "German shepherd, German shepherd dog, German police dog, alsatian",
+                "Doberman, Doberman pinscher",
+                "miniature pinscher",
+                "Greater Swiss Mountain dog",
+                "Bernese mountain dog",
+                "Appenzeller",
+                "EntleBucher",
+                "boxer",
+                "bull mastiff",
+                "Tibetan mastiff",
+                "French bulldog",
+                "Great Dane",
+                "Saint Bernard, St Bernard",
+                "Eskimo dog, husky",
+                "malamute, malemute, Alaskan malamute",
+                "Siberian husky",
+                "dalmatian, coach dog, carriage dog",
+                "affenpinscher, monkey pinscher, monkey dog",
+                "basenji",
+                "pug, pug-dog",
+                "Leonberg",
+                "Newfoundland, Newfoundland dog",
+                "Great Pyrenees",
+                "Samoyed, Samoyede",
+                "Pomeranian",
+                "chow, chow chow",
+                "keeshond",
+                "Brabancon griffon",
+                "Pembroke, Pembroke Welsh corgi",
+                "Cardigan, Cardigan Welsh corgi",
+                "toy poodle",
+                "miniature poodle",
+                "standard poodle",
+                "Mexican hairless",
+                "timber wolf, grey wolf, gray wolf, Canis lupus",
+                "white wolf, Arctic wolf, Canis lupus tundrarum",
+                "red wolf, maned wolf, Canis rufus, Canis niger",
+                "coyote, prairie wolf, brush wolf, Canis latrans",
+                "dingo, warrigal, warragal, Canis dingo",
+                "dhole, Cuon alpinus",
+                "African hunting dog, hyena dog, Cape hunting dog, Lycaon pictus",
+                "hyena, hyaena",
+                "red fox, Vulpes vulpes",
+                "kit fox, Vulpes macrotis",
+                "Arctic fox, white fox, Alopex lagopus",
+                "grey fox, gray fox, Urocyon cinereoargenteus",
+                "tabby, tabby cat",
+                "tiger cat",
+                "Persian cat",
+                "Siamese cat, Siamese",
+                "Egyptian cat",
+                "cougar, puma, catamount, mountain lion, painter, panther, Felis concolor",
+                "lynx, catamount",
+                "leopard, Panthera pardus",
+                "snow leopard, ounce, Panthera uncia",
+                "jaguar, panther, Panthera onca, Felis onca",
+                "lion, king of beasts, Panthera leo",
+                "tiger, Panthera tigris",
+                "cheetah, chetah, Acinonyx jubatus",
+                "brown bear, bruin, Ursus arctos",
+                "American black bear, black bear, Ursus americanus, Euarctos americanus",
+                "ice bear, polar bear, Ursus Maritimus, Thalarctos maritimus",
+                "sloth bear, Melursus ursinus, Ursus ursinus",
+                "mongoose",
+                "meerkat, mierkat",
+                "tiger beetle",
+                "ladybug, ladybeetle, lady beetle, ladybird, ladybird beetle",
+                "ground beetle, carabid beetle",
+                "long-horned beetle, longicorn, longicorn beetle",
+                "leaf beetle, chrysomelid",
+                "dung beetle",
+                "rhinoceros beetle",
+                "weevil",
+                "fly",
+                "bee",
+                "ant, emmet, pismire",
+                "grasshopper, hopper",
+                "cricket",
+                "walking stick, walkingstick, stick insect",
+                "cockroach, roach",
+                "mantis, mantid",
+                "cicada, cicala",
+                "leafhopper",
+                "lacewing, lacewing fly",
+                "dragonfly, darning needle, devil's darning needle, sewing needle, snake feeder, snake doctor, mosquito hawk, skeeter hawk",
+                "damselfly",
+                "admiral",
+                "ringlet, ringlet butterfly",
+                "monarch, monarch butterfly, milkweed butterfly, Danaus plexippus",
+                "cabbage butterfly",
+                "sulphur butterfly, sulfur butterfly",
+                "lycaenid, lycaenid butterfly",
+                "starfish, sea star",
+                "sea urchin",
+                "sea cucumber, holothurian",
+                "wood rabbit, cottontail, cottontail rabbit",
+                "hare",
+                "Angora, Angora rabbit",
+                "hamster",
+                "porcupine, hedgehog",
+                "fox squirrel, eastern fox squirrel, Sciurus niger",
+                "marmot",
+                "beaver",
+                "guinea pig, Cavia cobaya",
+                "sorrel",
+                "zebra",
+                "hog, pig, grunter, squealer, Sus scrofa",
+                "wild boar, boar, Sus scrofa",
+                "warthog",
+                "hippopotamus, hippo, river horse, Hippopotamus amphibius",
+                "ox",
+                "water buffalo, water ox, Asiatic buffalo, Bubalus bubalis",
+                "bison",
+                "ram, tup",
+                "bighorn, bighorn sheep, cimarron, Rocky Mountain bighorn, Rocky Mountain sheep, Ovis canadensis",
+                "ibex, Capra ibex",
+                "hartebeest",
+                "impala, Aepyceros melampus",
+                "gazelle",
+                "Arabian camel, dromedary, Camelus dromedarius",
+                "llama",
+                "weasel",
+                "mink",
+                "polecat, fitch, foulmart, foumart, Mustela putorius",
+                "black-footed ferret, ferret, Mustela nigripes",
+                "otter",
+                "skunk, polecat, wood pussy",
+                "badger",
+                "armadillo",
+                "three-toed sloth, ai, Bradypus tridactylus",
+                "orangutan, orang, orangutang, Pongo pygmaeus",
+                "gorilla, Gorilla gorilla",
+                "chimpanzee, chimp, Pan troglodytes",
+                "gibbon, Hylobates lar",
+                "siamang, Hylobates syndactylus, Symphalangus syndactylus",
+                "guenon, guenon monkey",
+                "patas, hussar monkey, Erythrocebus patas",
+                "baboon",
+                "macaque",
+                "langur",
+                "colobus, colobus monkey",
+                "proboscis monkey, Nasalis larvatus",
+                "marmoset",
+                "capuchin, ringtail, Cebus capucinus",
+                "howler monkey, howler",
+                "titi, titi monkey",
+                "spider monkey, Ateles geoffroyi",
+                "squirrel monkey, Saimiri sciureus",
+                "Madagascar cat, ring-tailed lemur, Lemur catta",
+                "indri, indris, Indri indri, Indri brevicaudatus",
+                "Indian elephant, Elephas maximus",
+                "African elephant, Loxodonta africana",
+                "lesser panda, red panda, panda, bear cat, cat bear, Ailurus fulgens",
+                "giant panda, panda, panda bear, coon bear, Ailuropoda melanoleuca",
+                "barracouta, snoek",
+                "eel",
+                "coho, cohoe, coho salmon, blue jack, silver salmon, Oncorhynchus kisutch",
+                "rock beauty, Holocanthus tricolor",
+                "anemone fish",
+                "sturgeon",
+                "gar, garfish, garpike, billfish, Lepisosteus osseus",
+                "lionfish",
+                "puffer, pufferfish, blowfish, globefish",
+                "abacus",
+                "abaya",
+                "academic gown, academic robe, judge's robe",
+                "accordion, piano accordion, squeeze box",
+                "acoustic guitar",
+                "aircraft carrier, carrier, flattop, attack aircraft carrier",
+                "airliner",
+                "airship, dirigible",
+                "altar",
+                "ambulance",
+                "amphibian, amphibious vehicle",
+                "analog clock"
+            ];
+            
+            if (classId >= 0 && classId < classNames.length) {
+                return classNames[classId];
+            }
+            return null;
+        }
+
+        // 页面交互逻辑
+        document.addEventListener('DOMContentLoaded', async () => {
+            const imageFileInput = document.getElementById('imageFile');
+            const imagePreview = document.getElementById('imagePreview');
+            const predictBtn = document.getElementById('predictBtn');
+            const resultDiv = document.getElementById('result');
+            const statusDiv = document.getElementById('status');
+            
+            // 初始化SDK
+            const sdk = new AISDK();
+            
+            try {
+                statusDiv.textContent = '正在加载模型...';
+                await sdk.initialize();
+                statusDiv.textContent = '模型加载完成，可以开始分类';
+                predictBtn.disabled = false;
+                predictBtn.textContent = '进行分类';
+            } catch (error) {
+                statusDiv.textContent = '模型加载失败: ' + error.message;
+                resultDiv.className = 'error';
+                return;
+            }
+            
+            // 图片预览
+            imageFileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        imagePreview.innerHTML = `<img src="${event.target.result}" alt="预览">`;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            // 预测按钮点击事件
+            predictBtn.addEventListener('click', async function() {
+                const file = imageFileInput.files[0];
+                
+                if (!file) {
+                    alert('请先选择图片');
+                    return;
+                }
+                
+                // 显示加载状态
+                statusDiv.innerHTML = '<p>正在分类中...</p>';
+                resultDiv.className = 'loading';
+                
+                try {
+                    // 读取图片
+                    const image = await new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.onerror = () => reject(new Error('图片加载失败'));
+                        img.src = URL.createObjectURL(file);
+                    });
+                    
+                    // 进行推理
+                    const prediction = await sdk.predict(image);
+                    
+                    // 获取类别名称
+                    const className = getImageNetClassName(prediction.classId);
+                    
+                    // 显示结果
+                    statusDiv.innerHTML = `
+                        <h3>分类结果</h3>
+                        <p><strong>类别ID:</strong> ${prediction.classId}</p>
+                        <p><strong>类别名称:</strong> ${className || '未知类别'}</p>
+                        <p><strong>置信度:</strong> ${prediction.score.toFixed(4)}</p>
+                        <p><strong>推理延迟:</strong> ${prediction.latencyMs}ms</p>
+                    `;
+                    resultDiv.className = 'success';
+                    
+                } catch (error) {
+                    statusDiv.innerHTML = `<p>错误: ${error.message}</p>`;
+                    resultDiv.className = 'error';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
