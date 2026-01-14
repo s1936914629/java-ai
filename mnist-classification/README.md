@@ -13,7 +13,8 @@
 
 
 ## 📋 系统要求
-- Java: 21
+- Java: 17 (推荐)
+- Node.js: 18.0+ (用于Vue前端开发)
 - Maven: 3.6+ (推荐使用Maven进行构建)
 - 内存: 至少2GB可用内存
 - 磁盘空间: 至少100MB可用空间（用于存储MNIST数据集）
@@ -22,26 +23,50 @@
 
 1. 克隆项目
    ```bash
-   git clone https://github.com/yourusername/mnist-classification.git
+   git clone https://github.com/s1936914629/java-ai.git
    cd mnist-classification
    ```
 
-2. 构建项目
+2. 安装依赖
    ```bash
-   mvn clean package
+   # 安装Java后端依赖（可选，运行时自动下载）
+   mvn dependency:resolve
+   
+   # 安装Vue前端依赖
+   cd web
+   npm install
+   cd ..
    ```
 
 3. 运行应用
+   
+   **方式1：同时启动前后端（推荐开发环境使用）**
    ```bash
-   # 方式1：使用Maven运行
+   # 终端1：启动后端Spring Boot应用
    mvn spring-boot:run
    
-   # 方式2：运行打包后的jar文件
+   # 终端2：启动前端Vue应用
+   cd web
+   npm run dev
+   ```
+   
+   **方式2：只启动后端（兼容传统访问方式）**
+   ```bash
+   # 使用Maven运行
+   mvn spring-boot:run
+   
+   # 或运行打包后的jar文件
+   mvn clean package
    java -jar target/mnist-classification-0.0.1-SNAPSHOT.jar
    ```
 
 4. 访问应用
-   应用启动后，在浏览器中访问：
+   
+   **使用Vue前端应用（推荐）**
+   - 应用地址: http://localhost:5173/
+   - 所有功能均通过此地址访问
+   
+   **使用传统访问方式（兼容）**
    - 主页: http://localhost:8080
    - 训练页面: http://localhost:8080/train
    - 识别页面: http://localhost:8080/predict
@@ -59,12 +84,24 @@ mnist-classification/
 │   └── service/
 │       └── TrainingService.java                # 训练服务
 ├── src/main/resources/
-│   ├── templates/                              # Thymeleaf模板
+│   ├── templates/                              # Thymeleaf模板（兼容保留）
 │   │   ├── index.html                          # 首页
 │   │   ├── train.html                          # 训练页面
 │   │   └── predict.html                        # 识别页面
 │   └── application.properties                  # 应用配置
 ├── src/test/                                   # 测试代码目录
+├── web/                                        # Vue 3前端应用
+│   ├── src/
+│   │   ├── main.js                             # Vue应用入口
+│   │   ├── App.vue                             # 主应用组件
+│   │   └── views/
+│   │       ├── HomeView.vue                    # 首页组件
+│   │       ├── TrainView.vue                   # 训练页面组件
+│   │       └── PredictView.vue                 # 识别页面组件
+│   ├── public/
+│   ├── package.json                            # Vue项目配置
+│   ├── vite.config.js                          # Vite构建配置
+│   └── .gitignore                              # Git忽略文件
 ├── models/                                     # 模型保存目录（运行时生成）
 ├── uploads/                                    # 上传文件目录（运行时生成）
 ├── README.md                                   # 项目文档
@@ -81,9 +118,11 @@ mnist-classification/
 - Apache Commons: 工具库
 
 ### 前端技术栈
+- Vue 3: 前端框架
+- Vite: 构建工具
 - Bootstrap 5: 响应式UI框架
+- Bootstrap Icons: 图标库
 - HTML5 Canvas: 画板功能
-- JavaScript: 前端交互逻辑
 - Fetch API: 异步请求
 
 ### 神经网络结构
@@ -102,25 +141,42 @@ mnist-classification/
 - 首次训练需要下载MNIST数据集（约11MB）
 - 数据集会自动保存到 ~/.deeplearning4j/data/mnist/ 目录
 
-### 2. 训练模型
-1. 访问训练页面: http://localhost:8080/train
-2. 设置训练轮数（建议5-10轮）
-3. 点击"开始训练"按钮
-4. 观察训练日志和进度条
-5. 训练完成后查看准确率和其他评估指标
+### 2. 使用Vue前端应用（推荐）
 
-### 3. 手写识别
-1. 访问识别页面: http://localhost:8080/predict
-2. 在画板上手写数字（0-9）
-3. 可以调整画笔粗细
-4. 点击"识别数字"按钮
-5. 查看识别结果和置信度分布
+1. 访问应用首页: http://localhost:5173/
 
-### 4. 上传识别
-1. 在识别页面点击"选择文件"
-2. 上传包含数字的图片（PNG/JPG格式）
-3. 系统会自动处理并识别
-4. 查看识别结果
+2. **训练模型**:
+   - 点击导航栏的"模型训练"按钮
+   - 设置训练轮数（建议5-10轮）
+   - 点击"开始训练"按钮
+   - 观察训练日志和进度条
+   - 训练完成后查看准确率和其他评估指标
+
+3. **手写识别**:
+   - 点击导航栏的"在线识别"按钮
+   - 在画板上手写数字（0-9）
+   - 可以调整画笔粗细
+   - 点击"识别数字"按钮
+   - 查看识别结果和置信度分布
+
+4. **上传识别**:
+   - 在识别页面点击"选择文件"
+   - 上传包含数字的图片（PNG/JPG格式）
+   - 系统会自动处理并识别
+   - 查看识别结果
+
+### 3. 使用传统访问方式（兼容）
+
+1. **训练模型**:
+   - 访问训练页面: http://localhost:8080/train
+   - 设置训练轮数并点击"开始训练"
+
+2. **手写识别**:
+   - 访问识别页面: http://localhost:8080/predict
+   - 在画板上手写数字并点击"识别数字"
+
+3. **上传识别**:
+   - 在识别页面点击"选择文件"上传图片进行识别
 
 ## ⚙️ 配置说明
 
@@ -231,35 +287,56 @@ taskkill /PID <PID> /F
 
 ### 生产环境部署
 
-1. 打包应用：
-   ```bash
-   mvn clean package -DskipTests
-   ```
+#### 1. 构建后端应用
+```bash
+mvn clean package -DskipTests
+```
 
-2. 创建启动脚本：
-   ```bash
-   #!/bin/bash
-   # run.sh
-   export JAVA_HOME=/path/to/java21
-   export JAVA_OPTS="-Xmx2g -Xms1g -Dspring.profiles.active=prod"
-   java $JAVA_OPTS -jar mnist-classification-0.0.1-SNAPSHOT.jar
-   ```
+#### 2. 构建前端应用
+```bash
+cd web
+npm run build
+cd ..
+```
 
-3. 配置生产环境：
-   ```properties
-   # application-prod.properties
-   spring.thymeleaf.cache=true
-   logging.level.org.springframework=WARN
-   logging.level.org.sqx=INFO
-   ```
+#### 3. 创建启动脚本
+```bash
+#!/bin/bash
+# run.sh
+export JAVA_HOME=/path/to/java17
+export JAVA_OPTS="-Xmx2g -Xms1g -Dspring.profiles.active=prod"
+java $JAVA_OPTS -jar mnist-classification-0.0.1-SNAPSHOT.jar
+```
+
+#### 4. 配置生产环境
+```properties
+# application-prod.properties
+spring.thymeleaf.cache=true
+logging.level.org.springframework=WARN
+logging.level.org.sqx=INFO
+```
 
 ### Docker 部署
 
 ```dockerfile
 # Dockerfile
-FROM openjdk:21-jre-slim
+FROM maven:3.8.6-openjdk-17 AS build
 WORKDIR /app
-COPY target/mnist-classification-0.0.1-SNAPSHOT.jar app.jar
+COPY pom.xml .
+COPY src src
+RUN mvn clean package -DskipTests
+
+FROM node:18 AS frontend-build
+WORKDIR /app/web
+COPY web/package.json web/package-lock.json ./
+RUN npm install
+COPY web .
+RUN npm run build
+
+FROM openjdk:17-jre-slim
+WORKDIR /app
+COPY --from=build /app/target/mnist-classification-0.0.1-SNAPSHOT.jar app.jar
+COPY --from=frontend-build /app/web/dist /app/static
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
@@ -270,6 +347,16 @@ docker build -t mnist-classification .
 docker run -p 8080:8080 -d mnist-classification
 ```
 ## 📚 API 文档
+
+### 模型状态API
+- **URL**: `/api/model/status`
+- **方法**: GET
+- **响应**: JSON格式的模型状态，包含是否已训练的信息
+  ```json
+  {
+    "trained": true
+  }
+  ```
 
 ### 训练API
 - **URL**: `/api/train`

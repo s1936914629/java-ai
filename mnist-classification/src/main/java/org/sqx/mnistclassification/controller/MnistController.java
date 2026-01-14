@@ -88,6 +88,14 @@ public class MnistController {
         return result;
     }
 
+    @GetMapping("/api/model/status")
+    @ResponseBody
+    public Map<String, Object> getModelStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("trained", mnistModel.isTrained());
+        return status;
+    }
+
     @PostMapping("/api/upload")
     @ResponseBody
     public Map<String, Object> uploadImage(@RequestParam("file") MultipartFile file) {

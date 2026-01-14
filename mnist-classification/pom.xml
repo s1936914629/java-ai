@@ -27,7 +27,7 @@
         <url/>
     </scm>
     <properties>
-        <java.version>21</java.version>
+        <java.version>17</java.version>
         <dl4j.version>1.0.0-M2.1</dl4j.version>
     </properties>
 
