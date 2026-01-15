@@ -2,7 +2,6 @@ package org.sqx.mnistclassification.service;
 
 import org.deeplearning4j.datasets.iterator.impl.MnistDataSetIterator;
 import org.deeplearning4j.eval.Evaluation;
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
 import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
 import org.sqx.mnistclassification.model.MnistModel;
 import org.slf4j.Logger;
@@ -30,15 +29,14 @@ public class TrainingService {
             // 训练模型
             mnistModel.train(epochs);
 
-            // 评估模型 - 这里需要从MnistModel获取实际的网络
+            // 评估模型
             DataSetIterator mnistTest = new MnistDataSetIterator(64, false, 123);
-
-            // 修改：这里应该调用mnistModel内部的评估方法
-            Evaluation eval = evaluateModel();
+            Evaluation eval = mnistModel.evaluate(mnistTest);
 
             long endTime = System.currentTimeMillis();
             long trainingTime = (endTime - startTime) / 1000;
 
+            // 正确格式化数据
             result.put("success", true);
             result.put("accuracy", eval.accuracy());
             result.put("precision", eval.precision());
@@ -47,6 +45,13 @@ public class TrainingService {
             result.put("trainingTime", trainingTime);
             result.put("epochs", epochs);
             result.put("confusionMatrix", eval.confusionToString());
+
+            // 添加每个数字的准确率
+            Map<Integer, Double> perClassAccuracy = new HashMap<>();
+            for (int i = 0; i < 10; i++) {
+                perClassAccuracy.put(i, eval.precision(i));
+            }
+            result.put("perClassAccuracy", perClassAccuracy);
 
             log.info("训练完成，准确率: {:.2f}%", eval.accuracy() * 100);
 
@@ -59,16 +64,9 @@ public class TrainingService {
         return result;
     }
 
-    // 新增：评估模型的方法
-    private Evaluation evaluateModel() throws Exception {
-        DataSetIterator mnistTest = new MnistDataSetIterator(64, false, 123);
-        return mnistModel.evaluate(mnistTest);
-    }
-
     public Map<String, Object> getModelStatus() {
         Map<String, Object> status = new HashMap<>();
         status.put("trained", mnistModel.isTrained());
-        status.put("modelInfo", mnistModel.getModelInfo());
         return status;
     }
 }
