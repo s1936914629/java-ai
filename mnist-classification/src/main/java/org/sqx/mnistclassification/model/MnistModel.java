@@ -39,6 +39,14 @@ public class MnistModel {
     private double[] trainingAccuracyHistory;
     private double[] trainingLossHistory;
     private int currentEpoch = 0;
+    
+    // 调参相关参数
+    private double learningRate = 0.001;
+    private int batchSize = 64;
+    private int[] hiddenLayerSizes = {1024, 512, 256, 128};
+    private double[] dropoutRates = {0.3, 0.3, 0.2};
+    private double l2Regularization = 0.0001;
+    private int rngSeed = 12345;
 
     public MnistModel() {
         new File("models").mkdirs();
@@ -65,47 +73,44 @@ public class MnistModel {
     private void createImprovedModel() {
         log.info("创建改进版神经网络模型...");
 
-        int rngSeed = 12345;
-        double learningRate = 0.001;
-
         // 使用优化的全连接神经网络结构，确保与现有输入格式兼容
         MultiLayerConfiguration conf = new NeuralNetConfiguration.Builder()
                 .seed(rngSeed)
                 .updater(new Adam(learningRate))
                 .weightInit(WeightInit.XAVIER)
-                .l2(0.0001) // L2正则化
+                .l2(l2Regularization) // L2正则化
                 .list()
                 // 输入层
                 .layer(new DenseLayer.Builder()
                         .nIn(784) // 输入特征数（28x28）
-                        .nOut(1024) // 增加神经元数量
+                        .nOut(hiddenLayerSizes[0]) // 第一层隐藏层神经元数量
                         .activation(Activation.RELU)
-                        .dropOut(0.3) // Dropout防止过拟合
+                        .dropOut(dropoutRates[0]) // Dropout防止过拟合
                         .build())
                 // 批归一化层
                 .layer(new BatchNormalization.Builder()
                         .build())
                 // 隐藏层1
                 .layer(new DenseLayer.Builder()
-                        .nOut(512) // 神经元数量
+                        .nOut(hiddenLayerSizes[1]) // 第二层隐藏层神经元数量
                         .activation(Activation.RELU)
-                        .dropOut(0.3) // Dropout防止过拟合
+                        .dropOut(dropoutRates[1]) // Dropout防止过拟合
                         .build())
                 // 批归一化层
                 .layer(new BatchNormalization.Builder()
                         .build())
                 // 隐藏层2
                 .layer(new DenseLayer.Builder()
-                        .nOut(256) // 神经元数量
+                        .nOut(hiddenLayerSizes[2]) // 第三层隐藏层神经元数量
                         .activation(Activation.RELU)
-                        .dropOut(0.2) // Dropout防止过拟合
+                        .dropOut(dropoutRates[2]) // Dropout防止过拟合
                         .build())
                 // 批归一化层
                 .layer(new BatchNormalization.Builder()
                         .build())
                 // 隐藏层3
                 .layer(new DenseLayer.Builder()
-                        .nOut(128) // 神经元数量
+                        .nOut(hiddenLayerSizes[3]) // 第四层隐藏层神经元数量
                         .activation(Activation.RELU)
                         .build())
                 // 输出层
@@ -127,8 +132,6 @@ public class MnistModel {
 
     public void train(int epochs) throws IOException {
         log.info("开始训练模型，轮数: {}", epochs);
-
-        int batchSize = 64; // 减小批大小以获得更好的梯度更新
 
         // 初始化训练历史记录
         trainingAccuracyHistory = new double[epochs];
@@ -348,5 +351,56 @@ public class MnistModel {
             history.put("epochs", currentEpoch);
         }
         return history;
+    }
+    
+    // 调参相关方法
+    public void setLearningRate(double learningRate) {
+        this.learningRate = learningRate;
+        log.info("学习率已更新为: {}", learningRate);
+    }
+    
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
+        log.info("批大小已更新为: {}", batchSize);
+    }
+    
+    public void setHiddenLayerSizes(int[] hiddenLayerSizes) {
+        this.hiddenLayerSizes = hiddenLayerSizes;
+        log.info("隐藏层结构已更新为: {}", java.util.Arrays.toString(hiddenLayerSizes));
+    }
+    
+    public void setDropoutRates(double[] dropoutRates) {
+        this.dropoutRates = dropoutRates;
+        log.info("Dropout率已更新为: {}", java.util.Arrays.toString(dropoutRates));
+    }
+    
+    public void setL2Regularization(double l2Regularization) {
+        this.l2Regularization = l2Regularization;
+        log.info("L2正则化系数已更新为: {}", l2Regularization);
+    }
+    
+    public void setRngSeed(int rngSeed) {
+        this.rngSeed = rngSeed;
+        log.info("随机种子已更新为: {}", rngSeed);
+    }
+    
+    // 重新创建模型以应用新参数
+    public void rebuildModel() {
+        createImprovedModel();
+        isTrained = false;
+        log.info("模型已重新构建，应用了新的参数配置");
+    }
+    
+    // 获取当前参数配置
+    public Map<String, Object> getCurrentParameters() {
+        Map<String, Object> params = new HashMap<>();
+        params.put("learningRate", learningRate);
+        params.put("batchSize", batchSize);
+        params.put("hiddenLayerSizes", hiddenLayerSizes);
+        params.put("dropoutRates", dropoutRates);
+        params.put("l2Regularization", l2Regularization);
+        params.put("rngSeed", rngSeed);
+        params.put("isTrained", isTrained);
+        return params;
     }
 }
