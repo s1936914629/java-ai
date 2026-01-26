@@ -1,0 +1,10 @@
+com\deepseek\model\DeepSeekMessage.class
+com\deepseek\DeepSeekUtilApplication.class
+com\deepseek\model\DeepSeekResponse.class
+com\deepseek\model\DeepSeekResponse$Choice.class
+com\deepseek\model\DeepSeekRequest.class
+com\deepseek\util\DeepSeekClient.class
+com\deepseek\config\DeepSeekConfig.class
+META-INF\spring-configuration-metadata.json
+com\deepseek\model\DeepSeekRequest$Builder.class
+com\deepseek\model\DeepSeekResponse$Usage.class

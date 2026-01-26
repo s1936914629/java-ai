@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: deepseek-util
+
+# DeepSeek配置
+deepseek:
+  # API密钥，需要在实际使用时替换为真实密钥
+  api-key: ${DEEPSEEK_API_KEY:your-api-key-here}
+  # API基础URL
+  base-url: https://api.deepseek.com/v1
+  # 默认模型
+  model: deepseek-chat
+  # 超时时间（秒）
+  timeout: 30
