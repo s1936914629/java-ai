@@ -127,7 +127,7 @@ mnist-classification/
 - Fetch API: 异步请求
 
 ### 神经网络结构
-```java
+```txt
 输入层: 784个神经元 (28×28像素)
 隐藏层1: 128个神经元 (ReLU激活函数)
 隐藏层2: 64个神经元 (ReLU激活函数)

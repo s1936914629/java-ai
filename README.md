@@ -10,6 +10,7 @@
 |---------|------|
 | [mnist-classification](#mnist-classification) | 基于 Deeplearning4j 和 Spring Boot 构建的 MNIST 手写数字识别系统 |
 | [java-ai-demo](#java-ai-demo) | Java AI 应用示例演示项目 |
+| [deepseek-util](#deepseek-util) | 基于 Spring Boot 构建的 DeepSeek AI 接口工具库 |
 
 ## 🧠 子项目介绍
 
@@ -45,6 +46,27 @@ Java AI 应用示例演示项目，包含模型加载和使用示例。
 - ONNX 模型支持
 
 **详细文档：** [java-ai-demo/README.md](java-ai-demo/README.md)
+
+### deepseek-util
+
+基于 Spring Boot 构建的 DeepSeek AI 接口工具库，提供与 DeepSeek 大语言模型的交互能力。
+
+**主要特性：**
+- DeepSeek AI 模型接口封装
+- 配置化的 API 调用参数
+- 简洁易用的客户端工具类
+- RESTful API 接口设计
+- 完整的请求/响应模型
+- 测试用例覆盖
+
+**技术栈：**
+- Spring Boot
+- Spring Web
+- Jackson
+- HttpClient
+- Lombok
+
+**详细文档：** [deepseek-util/README.md](deepseek-util/README.md)
 
 ## 🚀 快速开始
 
@@ -84,6 +106,23 @@ mvn clean compile
 
 # 运行项目
 mvn exec:java
+```
+
+### 运行 deepseek-util
+
+```bash
+# 克隆项目
+git clone https://github.com/s1936914629/java-ai.git
+cd java-ai/deepseek-util
+
+# 编译项目
+mvn clean compile
+
+# 运行项目
+mvn spring-boot:run
+
+# 访问应用
+# http://localhost:8080/
 ```
 
 ## 🛠️ 开发环境
@@ -136,8 +175,9 @@ mvn exec:java
 
 ## 📝 更新日志
 
-- 2024-01-XX: 初始化项目结构，添加 mnist-classification 和 java-ai-demo 子项目
-- 2024-01-XX: 完善 mnist-classification 项目的功能和文档
+- 2026-01-08: 初始化项目结构，添加 mnist-classification 和 java-ai-demo 子项目
+- 2026-01-15: 完善 mnist-classification 项目的功能和文档
+- 2026-01-28: 添加 deepseek-util 项目，提供 DeepSeek AI 接口工具库
 
 ---
 
