@@ -64,6 +64,20 @@ public class PromptTemplateABTest {
             for (String templateName : templateNames) {
                 executor.submit(() -> {
                     try {
+                        // 检查模板是否存在
+                        PromptTemplate template = deepSeekClient.getTemplate(templateName);
+                        if (template == null) {
+                            logger.error("模板不存在: {}", templateName);
+                            return;
+                        }
+                        
+                        // 检查参数数量是否匹配
+                        if (testCase.getParams().length != template.getParamCount()) {
+                            logger.warn("参数数量不匹配，跳过测试: 模板={} 需要 {} 个参数，但测试用例提供了 {} 个参数",
+                                    templateName, template.getParamCount(), testCase.getParams().length);
+                            return;
+                        }
+                        
                         long startTime = System.currentTimeMillis();
                         String response = deepSeekClient.chatWithTemplate(templateName, testCase.getParams());
                         long endTime = System.currentTimeMillis();

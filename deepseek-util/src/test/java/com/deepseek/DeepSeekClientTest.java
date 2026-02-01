@@ -6,17 +6,10 @@ import com.deepseek.util.DeepSeekClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 
 @SpringBootTest
-@TestPropertySource(properties = {
-        "deepseek.api-key=test-api-key",
-        "deepseek.base-url=https://api.deepseek.com/v1",
-        "deepseek.model=deepseek-chat",
-        "deepseek.timeout=30"
-})
 public class DeepSeekClientTest {
 
     @Autowired
@@ -180,24 +173,28 @@ public class DeepSeekClientTest {
         
         // 添加测试用例
         System.out.println("添加测试用例...");
+        // 适合 code_generator 模板的测试用例（需要 2 个参数）
         abTest.addTestCase("code_hello", "Java Hello World", new Object[]{"Java", "Hello World程序"});
+        // 适合 general_qa 模板的测试用例（需要 1 个参数）
         abTest.addTestCase("qa_ai", "什么是人工智能？", new Object[]{"什么是人工智能？"});
+        // 适合 summarizer 模板的测试用例（需要 1 个参数）
+        abTest.addTestCase("summary_text", "内容总结", new Object[]{"人工智能（Artificial Intelligence，简称AI）是指通过计算机程序模拟人类智能的技术。它涵盖了机器学习、深度学习、自然语言处理等多个领域。人工智能的发展已经在图像识别、语音助手、自动驾驶等领域取得了显著成果。未来，人工智能有望在医疗、教育、金融等更多行业发挥重要作用，为人类生活带来更多便利。"});
         
         System.out.println("A/B 测试功能初始化成功！");
         System.out.println("注意：实际执行测试会发送请求到 DeepSeek API，可能产生费用。");
         System.out.println("如需执行完整测试，请取消注释下面的代码。");
         
         // 取消注释下面的代码来执行完整的 A/B 测试
-        /*
+
         System.out.println("开始执行 A/B 测试...");
-        abTest.runTest("code_generator", "general_qa");
+        abTest.runTest("code_generator", "general_qa", "summarizer");
         System.out.println("测试执行完成，生成报告...");
-        
+
         // 生成报告
         com.deepseek.test.PromptTemplateABTest.ABTestReport report = abTest.generateReport();
         report.printReport();
         report.exportToCSV("prompt_ab_test_report.csv");
-        */
+
         
         System.out.println("A/B 测试功能测试完成！");
     }

@@ -1,14 +1,12 @@
 spring:
   application:
     name: deepseek-util
+  profiles:
+    active: local  # 默认激活 local 环境（开发时）
 
-# DeepSeek配置
+# DeepSeek 公共配置
 deepseek:
-  # API密钥，需要在实际使用时替换为真实密钥
-  api-key: ${DEEPSEEK_API_KEY:your-api-key-here}
-  # API基础URL
   base-url: https://api.deepseek.com/v1
-  # 默认模型
   model: deepseek-chat
-  # 超时时间（秒）
   timeout: 30
+  # 注意：api-key 不在此文件配置，由具体环境的配置文件提供

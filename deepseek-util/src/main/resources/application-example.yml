@@ -1,0 +1,8 @@
+# 配置说明：
+# 1. 复制此文件为 application-local.yml 用于本地开发
+# 2. 复制此文件为 application-prod.yml 用于生产环境
+# 3. 填入真实的 API Key 和其他敏感信息
+# 4. 永远不要提交 application-local.yml 和 application-prod.yml 到 Git！
+
+deepseek:
+  api-key: sk-your-api-key-here

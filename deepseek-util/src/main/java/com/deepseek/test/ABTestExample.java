@@ -1,28 +1,28 @@
 package com.deepseek.test;
 
-import com.deepseek.config.DeepSeekConfig;
 import com.deepseek.util.DeepSeekClient;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
  * A/B 测试示例类
  * <p>
  * 展示如何使用 PromptTemplateABTest 执行模板对比测试
  */
-public class ABTestExample {
+@SpringBootApplication
+public class ABTestExample implements CommandLineRunner {
+
+    @Autowired
+    private DeepSeekClient deepSeekClient;
 
     public static void main(String[] args) {
-        // 注意：在实际使用中，应该通过 Spring 依赖注入获取 DeepSeekClient
-        // 这里为了示例，我们创建一个简单的配置
-        DeepSeekConfig config = new DeepSeekConfig();
-        config.setApiKey("test-api-key");
-        config.setBaseUrl("https://api.deepseek.com/v1");
-        config.setModel("deepseek-chat");
-        config.setTimeout(30);
+        SpringApplication.run(ABTestExample.class, args);
+    }
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        DeepSeekClient deepSeekClient = new DeepSeekClient(config, objectMapper);
-
+    @Override
+    public void run(String... args) throws Exception {
         // 创建 A/B 测试实例
         PromptTemplateABTest abTest = new PromptTemplateABTest(deepSeekClient);
 
@@ -38,15 +38,35 @@ public class ABTestExample {
         // 3. 内容总结测试
         abTest.addTestCase("summary_text", "内容总结", new Object[]{"人工智能（Artificial Intelligence，简称AI）是指通过计算机程序模拟人类智能的技术。它涵盖了机器学习、深度学习、自然语言处理等多个领域。人工智能的发展已经在图像识别、语音助手、自动驾驶等领域取得了显著成果。未来，人工智能有望在医疗、教育、金融等更多行业发挥重要作用，为人类生活带来更多便利。"});
 
-        // 执行测试（对比 3 个模板）
+        // 执行测试（为不同类型的模板使用适合的测试用例）
         System.out.println("开始执行 A/B 测试...");
-        abTest.runTest("code_generator", "general_qa", "summarizer");
+        
+        // 为代码生成模板创建专门的测试实例
+        PromptTemplateABTest codeAbTest = new PromptTemplateABTest(deepSeekClient);
+        codeAbTest.addTestCase("code_hello", "Java Hello World", new Object[]{"Java", "Hello World程序"});
+        codeAbTest.addTestCase("code_sort", "Python 列表排序", new Object[]{"Python", "列表排序功能"});
+        codeAbTest.runTest("code_generator");
+        
+        // 为问答和总结模板创建专门的测试实例
+        PromptTemplateABTest qaAbTest = new PromptTemplateABTest(deepSeekClient);
+        qaAbTest.addTestCase("qa_ai", "什么是人工智能？", new Object[]{"什么是人工智能？"});
+        qaAbTest.addTestCase("qa_programming", "如何学习编程？", new Object[]{"如何学习编程？"});
+        qaAbTest.addTestCase("summary_text", "内容总结", new Object[]{"人工智能（Artificial Intelligence，简称AI）是指通过计算机程序模拟人类智能的技术。它涵盖了机器学习、深度学习、自然语言处理等多个领域。人工智能的发展已经在图像识别、语音助手、自动驾驶等领域取得了显著成果。未来，人工智能有望在医疗、教育、金融等更多行业发挥重要作用，为人类生活带来更多便利。"});
+        qaAbTest.runTest("general_qa", "summarizer");
+        
+        // 合并结果并生成报告
         System.out.println("测试执行完成，生成报告...");
 
         // 生成报告
-        PromptTemplateABTest.ABTestReport report = abTest.generateReport();
-        report.printReport();
-        report.exportToCSV("prompt_ab_test_report.csv");
+        System.out.println("=== 代码生成模板测试报告 ===");
+        PromptTemplateABTest.ABTestReport codeReport = codeAbTest.generateReport();
+        codeReport.printReport();
+        codeReport.exportToCSV("code_prompt_ab_test_report.csv");
+        
+        System.out.println("=== 问答和总结模板测试报告 ===");
+        PromptTemplateABTest.ABTestReport qaReport = qaAbTest.generateReport();
+        qaReport.printReport();
+        qaReport.exportToCSV("qa_prompt_ab_test_report.csv");
 
         System.out.println("A/B 测试示例完成！");
     }

@@ -37,3 +37,11 @@ jspm_packages/
 .env
 .env.local
 .env.*.local
+secrets.properties
+
+# 包含真实密钥的本地配置
+application-local.yml
+application-prod.yml
+application-dev.yml
+*.local.yml
+
