@@ -1,28 +1,31 @@
 package com.deepseek.test;
 
 import com.deepseek.util.DeepSeekClient;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
  * A/B 测试示例类
  * <p>
  * 展示如何使用 PromptTemplateABTest 执行模板对比测试
+ * <p>
+ * 注意：此类不再在应用启动时自动运行，需要显式调用 runExample 方法
  */
-@SpringBootApplication
-public class ABTestExample implements CommandLineRunner {
+public class ABTestExample {
 
-    @Autowired
-    private DeepSeekClient deepSeekClient;
+    private final DeepSeekClient deepSeekClient;
 
-    public static void main(String[] args) {
-        SpringApplication.run(ABTestExample.class, args);
+    /**
+     * 构造方法
+     * 
+     * @param deepSeekClient DeepSeek 客户端
+     */
+    public ABTestExample(DeepSeekClient deepSeekClient) {
+        this.deepSeekClient = deepSeekClient;
     }
 
-    @Override
-    public void run(String... args) throws Exception {
+    /**
+     * 运行 A/B 测试示例
+     */
+    public void runExample() throws Exception {
         // 创建 A/B 测试实例
         PromptTemplateABTest abTest = new PromptTemplateABTest(deepSeekClient);
 
@@ -69,5 +72,18 @@ public class ABTestExample implements CommandLineRunner {
         qaReport.exportToCSV("qa_prompt_ab_test_report.csv");
 
         System.out.println("A/B 测试示例完成！");
+    }
+
+    /**
+     * 主方法
+     * <p>
+     * 用于直接运行 A/B 测试示例
+     * 
+     * @param args 命令行参数
+     */
+    public static void main(String[] args) {
+        System.out.println("注意：ABTestExample 不再自动运行。");
+        System.out.println("如需运行 A/B 测试示例，请通过依赖注入获取 ABTestExample 实例并调用 runExample() 方法。");
+        System.out.println("或者，您可以创建一个专门的测试类来运行 A/B 测试。");
     }
 }

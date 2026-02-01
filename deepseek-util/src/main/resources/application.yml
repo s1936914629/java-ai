@@ -3,6 +3,8 @@ spring:
     name: deepseek-util
   profiles:
     active: local  # 默认激活 local 环境（开发时）
+  server:
+    port: 8081  # 使用8081端口，避免与其他应用冲突
 
 # DeepSeek 公共配置
 deepseek:
