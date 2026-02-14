@@ -1,27 +1,28 @@
 package com.deepseek.controller;
 
-import com.deepseek.model.DeepSeekMessage;
-import com.deepseek.model.DeepSeekResponse;
-import com.deepseek.util.DeepSeekClient;
+import com.deepseek.llm.LLMClient;
+import com.deepseek.llm.LLMMessage;
+import com.deepseek.llm.LLMResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * DeepSeek AI 工具接口控制器
+ * LLM 工具接口控制器
  * <p>
- * 提供与 DeepSeek AI 模型交互的 RESTful 接口，支持多种聊天模式
+ * 提供与大语言模型交互的 RESTful 接口，支持多种聊天模式
  */
 @RestController
-@RequestMapping("/api/deepseek")
+@RequestMapping("/api/llm")
 public class DeepSeekExampleController {
 
-    private final DeepSeekClient deepSeekClient;
+    private final LLMClient llmClient;
 
     @Autowired
-    public DeepSeekExampleController(DeepSeekClient deepSeekClient) {
-        this.deepSeekClient = deepSeekClient;
+    public DeepSeekExampleController(@Qualifier("deepSeekClient") LLMClient llmClient) {
+        this.llmClient = llmClient;
     }
 
     /**
@@ -30,11 +31,11 @@ public class DeepSeekExampleController {
      * 支持上下文连续的多轮对话，需要传递完整的消息历史
      * 
      * @param messages 消息列表，包含系统消息、用户消息和助手消息
-     * @return DeepSeek 模型的响应结果
+     * @return LLM 模型的响应结果
      */
     @PostMapping("/chat")
-    public DeepSeekResponse chat(@RequestBody List<DeepSeekMessage> messages) {
-        return deepSeekClient.chat(messages);
+    public LLMResponse chat(@RequestBody List<LLMMessage> messages) {
+        return llmClient.chat(messages);
     }
 
     /**
@@ -47,7 +48,7 @@ public class DeepSeekExampleController {
      */
     @PostMapping("/simple-chat")
     public String simpleChat(@RequestBody String prompt) {
-        return deepSeekClient.simpleChat(prompt);
+        return llmClient.simpleChat(prompt);
     }
 
     /**
@@ -59,7 +60,7 @@ public class DeepSeekExampleController {
      */
     @GetMapping("/health")
     public String health() {
-        return "DeepSeek Util Service is running!";
+        return "LLM Util Service is running!";
     }
 
     /**
@@ -73,6 +74,6 @@ public class DeepSeekExampleController {
      */
     @PostMapping("/system-chat")
     public String systemChat(@RequestParam String systemPrompt, @RequestParam String userPrompt) {
-        return deepSeekClient.simpleChat(systemPrompt, userPrompt);
+        return llmClient.simpleChat(systemPrompt, userPrompt);
     }
 }

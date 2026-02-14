@@ -1,7 +1,8 @@
 package com.deepseek;
 
-import com.deepseek.model.DeepSeekMessage;
 import com.deepseek.model.PromptTemplate;
+import com.deepseek.llm.LLMClient;
+import com.deepseek.llm.LLMMessage;
 import com.deepseek.util.DeepSeekClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,23 +23,23 @@ public class DeepSeekClientTest {
 
     @Test
     void testMessageCreation() {
-        DeepSeekMessage userMessage = DeepSeekMessage.user("Hello");
+        LLMMessage userMessage = LLMMessage.user("Hello");
         assert userMessage.getRole().equals("user");
         assert userMessage.getContent().equals("Hello");
 
-        DeepSeekMessage systemMessage = DeepSeekMessage.system("You are a helpful assistant");
+        LLMMessage systemMessage = LLMMessage.system("You are a helpful assistant");
         assert systemMessage.getRole().equals("system");
         assert systemMessage.getContent().equals("You are a helpful assistant");
 
-        DeepSeekMessage assistantMessage = DeepSeekMessage.assistant("Hi there!");
+        LLMMessage assistantMessage = LLMMessage.assistant("Hi there!");
         assert assistantMessage.getRole().equals("assistant");
         assert assistantMessage.getContent().equals("Hi there!");
     }
 
     @Test
     void testRequestBuilder() {
-        List<DeepSeekMessage> messages = List.of(
-                DeepSeekMessage.user("Hello")
+        List<LLMMessage> messages = List.of(
+                LLMMessage.user("Hello")
         );
         // 这个测试只是验证构建逻辑，不会实际发送请求
         assert messages.size() == 1;
@@ -49,8 +50,8 @@ public class DeepSeekClientTest {
     void testSimpleChatMethod() {
         // 测试simpleChat方法的参数构建
         String prompt = "What is the capital of France?";
-        List<DeepSeekMessage> messages = List.of(
-                DeepSeekMessage.user(prompt)
+        List<LLMMessage> messages = List.of(
+                LLMMessage.user(prompt)
         );
         assert messages.size() == 1;
         assert messages.get(0).getRole().equals("user");
@@ -62,9 +63,9 @@ public class DeepSeekClientTest {
         // 测试systemChat方法的参数构建
         String systemPrompt = "You are a geography expert";
         String userPrompt = "What is the capital of Japan?";
-        List<DeepSeekMessage> messages = List.of(
-                DeepSeekMessage.system(systemPrompt),
-                DeepSeekMessage.user(userPrompt)
+        List<LLMMessage> messages = List.of(
+                LLMMessage.system(systemPrompt),
+                LLMMessage.user(userPrompt)
         );
         assert messages.size() == 2;
         assert messages.get(0).getRole().equals("system");
@@ -114,7 +115,7 @@ public class DeepSeekClientTest {
     @Test
     void testGenerateMessagesFromTemplate() {
         // 测试根据模板生成消息功能
-        List<DeepSeekMessage> messages = deepSeekClient.generateMessagesFromTemplate(
+        List<LLMMessage> messages = deepSeekClient.generateMessagesFromTemplate(
                 "code_generator", "Java", "Hello World程序"
         );
         
@@ -162,8 +163,7 @@ public class DeepSeekClientTest {
 
     @Test
     void testABTestFunctionality() {
-        // 测试 A/B 测试功能（模拟测试，不实际发送请求）
-        // 注意：实际使用时可以取消注释下面的代码来执行完整的 A/B 测试
+        // 测试 A/B 测试功能（实际执行测试）
         
         System.out.println("=== A/B 测试功能测试 ===");
         System.out.println("创建 A/B 测试实例...");
@@ -179,21 +179,31 @@ public class DeepSeekClientTest {
         abTest.addTestCase("qa_ai", "什么是人工智能？", new Object[]{"什么是人工智能？"});
         // 适合 summarizer 模板的测试用例（需要 1 个参数）
         abTest.addTestCase("summary_text", "内容总结", new Object[]{"人工智能（Artificial Intelligence，简称AI）是指通过计算机程序模拟人类智能的技术。它涵盖了机器学习、深度学习、自然语言处理等多个领域。人工智能的发展已经在图像识别、语音助手、自动驾驶等领域取得了显著成果。未来，人工智能有望在医疗、教育、金融等更多行业发挥重要作用，为人类生活带来更多便利。"});
+        // 适合 translator 模板的测试用例（需要 2 个参数）
+        abTest.addTestCase("translate_test", "翻译测试", new Object[]{"中文", "Hello, how are you?"});
+        // 适合 problem_analyzer 模板的测试用例（需要 1 个参数）
+        abTest.addTestCase("problem_solve", "问题分析", new Object[]{"如何提高学习效率？"});
+        // 适合 learning_tutor 模板的测试用例（需要 2 个参数）
+        abTest.addTestCase("learn_math", "学习辅导", new Object[]{"微积分", "3个"});
+        // 适合 product_description 模板的测试用例（需要 2 个参数）
+        abTest.addTestCase("product_desc", "产品描述", new Object[]{"智能手机", "拍照和续航"});
+        // 适合 interview_prep 模板的测试用例（需要 2 个参数）
+        abTest.addTestCase("interview_java", "面试准备", new Object[]{"Java开发工程师", "5"});
+        // 适合 creative_writing 模板的测试用例（需要 2 个参数）
+        abTest.addTestCase("creative_story", "创意写作", new Object[]{"未来世界", "科幻小说"});
+        // 适合 email_writer 模板的测试用例（需要 2 个参数）
+        abTest.addTestCase("email_business", "邮件撰写", new Object[]{"商务合作", "邀请对方进行合作洽谈"});
         
-        System.out.println("A/B 测试功能初始化成功！");
-        System.out.println("注意：实际执行测试会发送请求到 DeepSeek API，可能产生费用。");
-        System.out.println("如需执行完整测试，请取消注释下面的代码。");
-        
-        // 取消注释下面的代码来执行完整的 A/B 测试
-
         System.out.println("开始执行 A/B 测试...");
-        abTest.runTest("code_generator", "general_qa", "summarizer");
+        abTest.runTest("code_generator", "general_qa", "summarizer", "translator", "problem_analyzer", 
+                      "learning_tutor", "product_description", "interview_prep", "creative_writing", "email_writer");
         System.out.println("测试执行完成，生成报告...");
 
         // 生成报告
         com.deepseek.test.PromptTemplateABTest.ABTestReport report = abTest.generateReport();
         report.printReport();
         report.exportToCSV("prompt_ab_test_report.csv");
+
 
         
         System.out.println("A/B 测试功能测试完成！");

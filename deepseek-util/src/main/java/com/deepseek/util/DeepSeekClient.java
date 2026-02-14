@@ -5,6 +5,9 @@ import com.deepseek.model.DeepSeekMessage;
 import com.deepseek.model.DeepSeekRequest;
 import com.deepseek.model.DeepSeekResponse;
 import com.deepseek.model.PromptTemplate;
+import com.deepseek.llm.LLMClient;
+import com.deepseek.llm.LLMMessage;
+import com.deepseek.llm.LLMResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +23,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +36,7 @@ import java.util.Map;
  * 包含重试机制和详细的日志记录
  */
 @Component
-public class DeepSeekClient {
+public class DeepSeekClient implements LLMClient {
 
     /**
      * 日志记录器
@@ -226,7 +230,8 @@ public class DeepSeekClient {
      * @param messages 消息列表
      * @return 响应结果
      */
-    public DeepSeekResponse chat(List<DeepSeekMessage> messages) {
+    @Override
+    public LLMResponse chat(List<LLMMessage> messages) {
         return chat(deepSeekConfig.getModel(), messages);
     }
 
@@ -239,12 +244,15 @@ public class DeepSeekClient {
      * @param messages 消息列表
      * @return 响应结果
      */
-    public DeepSeekResponse chat(String model, List<DeepSeekMessage> messages) {
+    @Override
+    public LLMResponse chat(String model, List<LLMMessage> messages) {
+        List<DeepSeekMessage> deepSeekMessages = convertToDeepSeekMessages(messages);
         DeepSeekRequest request = DeepSeekRequest.builder()
                 .model(model)
-                .messages(messages)
+                .messages(deepSeekMessages)
                 .build();
-        return sendRequest(request);
+        DeepSeekResponse deepSeekResponse = sendRequest(request);
+        return convertToLLMResponse(deepSeekResponse);
     }
 
     /**
@@ -258,14 +266,72 @@ public class DeepSeekClient {
      * @param maxTokens 最大令牌数
      * @return 响应结果
      */
-    public DeepSeekResponse chat(String model, List<DeepSeekMessage> messages, Double temperature, Integer maxTokens) {
+    @Override
+    public LLMResponse chat(String model, List<LLMMessage> messages, Double temperature, Integer maxTokens) {
+        List<DeepSeekMessage> deepSeekMessages = convertToDeepSeekMessages(messages);
         DeepSeekRequest request = DeepSeekRequest.builder()
                 .model(model)
-                .messages(messages)
+                .messages(deepSeekMessages)
                 .temperature(temperature)
                 .maxTokens(maxTokens)
                 .build();
-        return sendRequest(request);
+        DeepSeekResponse deepSeekResponse = sendRequest(request);
+        return convertToLLMResponse(deepSeekResponse);
+    }
+
+    /**
+     * 获取默认模型名称
+     * 
+     * @return 默认模型名称
+     */
+    @Override
+    public String getDefaultModel() {
+        return deepSeekConfig.getModel();
+    }
+
+    /**
+     * 将通用 LLMMessage 转换为 DeepSeekMessage
+     * 
+     * @param messages 通用消息列表
+     * @return DeepSeek 消息列表
+     */
+    private List<DeepSeekMessage> convertToDeepSeekMessages(List<LLMMessage> messages) {
+        List<DeepSeekMessage> deepSeekMessages = new ArrayList<>();
+        for (LLMMessage message : messages) {
+            DeepSeekMessage deepSeekMessage = new DeepSeekMessage();
+            deepSeekMessage.setRole(message.getRole());
+            deepSeekMessage.setContent(message.getContent());
+            deepSeekMessages.add(deepSeekMessage);
+        }
+        return deepSeekMessages;
+    }
+
+    /**
+     * 将 DeepSeekResponse 转换为通用 LLMResponse
+     * 
+     * @param deepSeekResponse DeepSeek 响应
+     * @return 通用 LLM 响应
+     */
+    private LLMResponse convertToLLMResponse(DeepSeekResponse deepSeekResponse) {
+        return new LLMResponse() {
+            {
+                if (deepSeekResponse.getChoices() != null) {
+                    List<LLMResponse.LLMChoice> choices = new ArrayList<>();
+                    for (DeepSeekResponse.Choice choice : deepSeekResponse.getChoices()) {
+                        LLMResponse.LLMChoice llmChoice = new LLMResponse.LLMChoice();
+                        if (choice.getMessage() != null) {
+                            LLMMessage llmMessage = LLMMessage.user(choice.getMessage().getContent());
+                            llmMessage.setRole(choice.getMessage().getRole());
+                            llmChoice.setMessage(llmMessage);
+                        }
+                        llmChoice.setIndex(choice.getIndex());
+                        choices.add(llmChoice);
+                    }
+                    setChoices(choices);
+                }
+                setModel(deepSeekResponse.getModel());
+            }
+        };
     }
 
     /**
@@ -276,13 +342,11 @@ public class DeepSeekClient {
      * @param prompt 用户提示
      * @return 回复内容
      */
+    @Override
     public String simpleChat(String prompt) {
-        List<DeepSeekMessage> messages = Collections.singletonList(DeepSeekMessage.user(prompt));
-        DeepSeekResponse response = chat(messages);
-        if (response.getChoices() != null && !response.getChoices().isEmpty()) {
-            return response.getChoices().get(0).getMessage().getContent();
-        }
-        return null;
+        List<LLMMessage> messages = Collections.singletonList(LLMMessage.user(prompt));
+        LLMResponse response = chat(messages);
+        return response.getFirstChoiceContent();
     }
 
     /**
@@ -294,16 +358,14 @@ public class DeepSeekClient {
      * @param userPrompt 用户提示
      * @return 回复内容
      */
+    @Override
     public String simpleChat(String systemPrompt, String userPrompt) {
-        List<DeepSeekMessage> messages = List.of(
-                DeepSeekMessage.system(systemPrompt),
-                DeepSeekMessage.user(userPrompt)
+        List<LLMMessage> messages = List.of(
+                LLMMessage.system(systemPrompt),
+                LLMMessage.user(userPrompt)
         );
-        DeepSeekResponse response = chat(messages);
-        if (response.getChoices() != null && !response.getChoices().isEmpty()) {
-            return response.getChoices().get(0).getMessage().getContent();
-        }
-        return null;
+        LLMResponse response = chat(messages);
+        return response.getFirstChoiceContent();
     }
 
     // ==================== 模板管理方法 ====================
@@ -351,7 +413,7 @@ public class DeepSeekClient {
      * @param params 模板参数
      * @return 消息列表
      */
-    public List<DeepSeekMessage> generateMessagesFromTemplate(String templateName, Object... params) {
+    public List<LLMMessage> generateMessagesFromTemplate(String templateName, Object... params) {
         PromptTemplate template = getTemplate(templateName);
         if (template == null) {
             throw new IllegalArgumentException("模板不存在: " + templateName);
@@ -359,8 +421,8 @@ public class DeepSeekClient {
         
         String userPrompt = template.buildUserPrompt(params);
         return List.of(
-                DeepSeekMessage.system(template.getSystemPrompt()),
-                DeepSeekMessage.user(userPrompt)
+                LLMMessage.system(template.getSystemPrompt()),
+                LLMMessage.user(userPrompt)
         );
     }
 
@@ -372,12 +434,9 @@ public class DeepSeekClient {
      * @return 回复内容
      */
     public String chatWithTemplate(String templateName, Object... params) {
-        List<DeepSeekMessage> messages = generateMessagesFromTemplate(templateName, params);
-        DeepSeekResponse response = chat(messages);
-        if (response.getChoices() != null && !response.getChoices().isEmpty()) {
-            return response.getChoices().get(0).getMessage().getContent();
-        }
-        return null;
+        List<LLMMessage> messages = generateMessagesFromTemplate(templateName, params);
+        LLMResponse response = chat(messages);
+        return response.getFirstChoiceContent();
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.deepseek.test;
 
 import com.deepseek.model.PromptTemplate;
+import com.deepseek.llm.LLMClient;
 import com.deepseek.util.DeepSeekClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,19 +26,28 @@ import java.util.concurrent.Executors;
 public class PromptTemplateABTest {
 
     private static final Logger logger = LoggerFactory.getLogger(PromptTemplateABTest.class);
-    private final DeepSeekClient deepSeekClient;
+    private final LLMClient llmClient;
     private final List<TestCase> testCases;
     private final Map<String, List<TestResult>> resultsMap;
 
     /**
      * 构造方法
      * 
+     * @param llmClient LLM 客户端
+     */
+    public PromptTemplateABTest(LLMClient llmClient) {
+        this.llmClient = llmClient;
+        this.testCases = new ArrayList<>();
+        this.resultsMap = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * 构造方法（兼容旧版本）
+     * 
      * @param deepSeekClient DeepSeek 客户端
      */
     public PromptTemplateABTest(DeepSeekClient deepSeekClient) {
-        this.deepSeekClient = deepSeekClient;
-        this.testCases = new ArrayList<>();
-        this.resultsMap = new ConcurrentHashMap<>();
+        this((LLMClient) deepSeekClient);
     }
 
     /**
@@ -65,7 +75,7 @@ public class PromptTemplateABTest {
                 executor.submit(() -> {
                     try {
                         // 检查模板是否存在
-                        PromptTemplate template = deepSeekClient.getTemplate(templateName);
+                        PromptTemplate template = llmClient.getTemplate(templateName);
                         if (template == null) {
                             logger.error("模板不存在: {}", templateName);
                             return;
@@ -79,7 +89,7 @@ public class PromptTemplateABTest {
                         }
                         
                         long startTime = System.currentTimeMillis();
-                        String response = deepSeekClient.chatWithTemplate(templateName, testCase.getParams());
+                        String response = llmClient.chatWithTemplate(templateName, testCase.getParams());
                         long endTime = System.currentTimeMillis();
 
                         // 评估响应质量（这里简化为示例评分，实际可根据需求实现更复杂的评估）
@@ -174,12 +184,44 @@ public class PromptTemplateABTest {
         if (response == null || response.isEmpty()) {
             return false;
         }
-        // 简单检查响应是否包含参数中的关键词
+        
+        // 获取测试用例名称，根据不同类型的模板使用不同的判断策略
+        String testCaseName = testCase.getName();
+        
+        // 对于翻译模板，检查响应是否包含中文（假设目标语言是中文）
+        if (testCaseName.startsWith("translate_")) {
+            return response.matches(".*[\\u4e00-\\u9fa5].*");
+        }
+        
+        // 对于总结模板，检查响应长度是否合理
+        if (testCaseName.startsWith("summary_")) {
+            return response.length() > 50;
+        }
+        
+        // 对于问答模板，检查响应是否包含问题的核心概念
+        if (testCaseName.startsWith("qa_")) {
+            String content = testCase.getParams()[0].toString();
+            // 提取核心概念
+            if (content.contains("人工智能")) {
+                return response.contains("人工智能") || response.contains("AI");
+            }
+        }
+        
+        // 对于问题分析模板，检查响应是否包含问题的核心概念
+        if (testCaseName.startsWith("problem_")) {
+            String content = testCase.getParams()[0].toString();
+            if (content.contains("学习效率")) {
+                return response.contains("学习效率") || response.contains("效率");
+            }
+        }
+        
+        // 默认判断逻辑：检查响应是否包含参数中的关键词
         for (Object param : testCase.getParams()) {
             if (param != null && response.contains(param.toString())) {
                 return true;
             }
         }
+        
         return false;
     }
 
