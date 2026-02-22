@@ -40,6 +40,13 @@ public class DeepSeekConfig {
      * 默认值: 30秒
      */
     private Integer timeout = 30;
+    
+    /**
+     * Embedding 模型名称
+     * <p>
+     * 默认值: text-embedding-3-small
+     */
+    private String embeddingModel = "text-embedding-3-small";
 
     /**
      * 获取 API 密钥
@@ -111,5 +118,23 @@ public class DeepSeekConfig {
      */
     public void setTimeout(Integer timeout) {
         this.timeout = timeout;
+    }
+
+    /**
+     * 获取 Embedding 模型名称
+     * 
+     * @return Embedding 模型名称
+     */
+    public String getEmbeddingModel() {
+        return embeddingModel;
+    }
+
+    /**
+     * 设置 Embedding 模型名称
+     * 
+     * @param embeddingModel Embedding 模型名称
+     */
+    public void setEmbeddingModel(String embeddingModel) {
+        this.embeddingModel = embeddingModel;
     }
 }

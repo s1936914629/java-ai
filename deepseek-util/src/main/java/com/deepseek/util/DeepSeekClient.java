@@ -9,19 +9,8 @@ import com.deepseek.llm.LLMClient;
 import com.deepseek.llm.LLMMessage;
 import com.deepseek.llm.LLMResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.ClientHttpRequestFactory;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,46 +20,14 @@ import java.util.Map;
 
 /**
  * DeepSeek 客户端工具类
- * <p>
  * 用于与 DeepSeek API 进行交互，发送请求并处理响应
  * 包含重试机制和详细的日志记录
  */
 @Component
-public class DeepSeekClient implements LLMClient {
+public class DeepSeekClient extends AbstractDeepSeekClient implements LLMClient {
 
-    /**
-     * 日志记录器
-     */
-    private static final Logger logger = LoggerFactory.getLogger(DeepSeekClient.class);
-    
-    /**
-     * 最大重试次数
-     */
-    private static final int MAX_RETRY_ATTEMPTS = 3;
-    
-    /**
-     * 重试退避时间（毫秒）
-     */
-    private static final long RETRY_BACKOFF_MS = 1000;
-
-    /**
-     * DeepSeek 配置
-     */
-    private final DeepSeekConfig deepSeekConfig;
-    
-    /**
-     * REST 模板
-     */
-    private final RestTemplate restTemplate;
-    
-    /**
-     * 对象映射器
-     */
-    private final ObjectMapper objectMapper;
-    
     /**
      * 模板存储
-     * <p>
      * 键：模板名称
      * 值：PromptTemplate 对象
      */
@@ -78,7 +35,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 默认模板列表
-     * <p>
      * 提供常用的 10 个 prompt 模板
      */
     private static final List<PromptTemplate> DEFAULT_TEMPLATES = List.of(
@@ -171,9 +127,7 @@ public class DeepSeekClient implements LLMClient {
      * @param objectMapper 对象映射器
      */
     public DeepSeekClient(DeepSeekConfig deepSeekConfig, ObjectMapper objectMapper) {
-        this.deepSeekConfig = deepSeekConfig;
-        this.objectMapper = objectMapper;
-        this.restTemplate = new RestTemplate(this.createRequestFactory());
+        super(deepSeekConfig, objectMapper);
         
         // 初始化模板存储并加载默认模板
         this.templateMap = new HashMap<>();
@@ -194,41 +148,8 @@ public class DeepSeekClient implements LLMClient {
     }
 
     /**
-     * 创建请求工厂
-     * <p>
-     * 配置连接超时和读取超时
-     * 
-     * @return 客户端请求工厂
-     */
-    private ClientHttpRequestFactory createRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(deepSeekConfig.getTimeout() * 1000);
-        factory.setReadTimeout(deepSeekConfig.getTimeout() * 1000);
-        return factory;
-    }
-
-    /**
-     * 创建 HTTP 头
-     * <p>
-     * 设置内容类型、认证信息和接受类型
-     * 
-     * @return HTTP 头
-     */
-    private HttpHeaders createHeaders() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(deepSeekConfig.getApiKey());
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        return headers;
-    }
-
-    /**
      * 多轮对话
-     * <p>
      * 使用默认模型进行多轮对话
-     * 
-     * @param messages 消息列表
-     * @return 响应结果
      */
     @Override
     public LLMResponse chat(List<LLMMessage> messages) {
@@ -237,12 +158,7 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 多轮对话
-     * <p>
      * 使用指定模型进行多轮对话
-     * 
-     * @param model 模型名称
-     * @param messages 消息列表
-     * @return 响应结果
      */
     @Override
     public LLMResponse chat(String model, List<LLMMessage> messages) {
@@ -257,14 +173,7 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 多轮对话
-     * <p>
      * 使用指定模型和参数进行多轮对话
-     * 
-     * @param model 模型名称
-     * @param messages 消息列表
-     * @param temperature 温度参数
-     * @param maxTokens 最大令牌数
-     * @return 响应结果
      */
     @Override
     public LLMResponse chat(String model, List<LLMMessage> messages, Double temperature, Integer maxTokens) {
@@ -281,8 +190,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 获取默认模型名称
-     * 
-     * @return 默认模型名称
      */
     @Override
     public String getDefaultModel() {
@@ -291,9 +198,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 将通用 LLMMessage 转换为 DeepSeekMessage
-     * 
-     * @param messages 通用消息列表
-     * @return DeepSeek 消息列表
      */
     private List<DeepSeekMessage> convertToDeepSeekMessages(List<LLMMessage> messages) {
         List<DeepSeekMessage> deepSeekMessages = new ArrayList<>();
@@ -308,9 +212,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 将 DeepSeekResponse 转换为通用 LLMResponse
-     * 
-     * @param deepSeekResponse DeepSeek 响应
-     * @return 通用 LLM 响应
      */
     private LLMResponse convertToLLMResponse(DeepSeekResponse deepSeekResponse) {
         return new LLMResponse() {
@@ -336,11 +237,7 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 简单对话
-     * <p>
      * 发送单个用户消息并获取回复
-     * 
-     * @param prompt 用户提示
-     * @return 回复内容
      */
     @Override
     public String simpleChat(String prompt) {
@@ -351,12 +248,7 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 带系统提示的简单对话
-     * <p>
      * 发送系统提示和用户消息并获取回复
-     * 
-     * @param systemPrompt 系统提示
-     * @param userPrompt 用户提示
-     * @return 回复内容
      */
     @Override
     public String simpleChat(String systemPrompt, String userPrompt) {
@@ -372,9 +264,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 添加模板
-     * 
-     * @param template 模板对象
-     * @return 是否添加成功
      */
     public boolean addTemplate(PromptTemplate template) {
         if (template == null || template.getName() == null) {
@@ -389,9 +278,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 获取模板
-     * 
-     * @param name 模板名称
-     * @return 模板对象，如果不存在则返回 null
      */
     public PromptTemplate getTemplate(String name) {
         return templateMap.get(name);
@@ -399,8 +285,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 获取所有模板列表
-     * 
-     * @return 模板列表
      */
     public List<PromptTemplate> getAllTemplates() {
         return List.copyOf(templateMap.values());
@@ -408,10 +292,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 根据模板生成消息
-     * 
-     * @param templateName 模板名称
-     * @param params 模板参数
-     * @return 消息列表
      */
     public List<LLMMessage> generateMessagesFromTemplate(String templateName, Object... params) {
         PromptTemplate template = getTemplate(templateName);
@@ -428,10 +308,6 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 使用模板发送请求
-     * 
-     * @param templateName 模板名称
-     * @param params 模板参数
-     * @return 回复内容
      */
     public String chatWithTemplate(String templateName, Object... params) {
         List<LLMMessage> messages = generateMessagesFromTemplate(templateName, params);
@@ -441,76 +317,19 @@ public class DeepSeekClient implements LLMClient {
 
     /**
      * 发送请求
-     * <p>
      * 发送请求到 DeepSeek API 并处理响应
-     * 包含重试机制和错误处理
-     * 
-     * @param request 请求对象
-     * @return 响应结果
      */
     private DeepSeekResponse sendRequest(DeepSeekRequest request) {
         String url = deepSeekConfig.getBaseUrl() + "/chat/completions";
         HttpEntity<DeepSeekRequest> httpEntity = new HttpEntity<>(request, createHeaders());
         
-        int attempt = 0;
-        while (true) {
-            attempt++;
-            try {
-                logger.debug("发送请求到 DeepSeek API (尝试 {} / {}): 模型={}, 消息数量={}", 
-                    attempt, MAX_RETRY_ATTEMPTS, request.getModel(), request.getMessages().size());
-                
-                long startTime = System.currentTimeMillis();
-                DeepSeekResponse response = restTemplate.exchange(url, HttpMethod.POST, httpEntity, DeepSeekResponse.class).getBody();
-                long endTime = System.currentTimeMillis();
-                
-                logger.info("从 DeepSeek API 接收响应，耗时 {}ms", endTime - startTime);
+        return sendRequestWithRetry(url, httpEntity, DeepSeekResponse.class, 
+            "发送请求到 DeepSeek API: 模型=" + request.getModel() + ", 消息数量=" + request.getMessages().size(), 
+            response -> {
                 if (response != null && response.getChoices() != null) {
                     logger.debug("响应包含 {} 个选项", response.getChoices().size());
                 }
-                
                 return response;
-            } catch (HttpServerErrorException e) {
-                // 服务器错误，进行重试
-                if (attempt < MAX_RETRY_ATTEMPTS && 
-                    (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE || 
-                     e.getStatusCode() == HttpStatus.GATEWAY_TIMEOUT || 
-                     e.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS)) {
-                    long backoffTime = RETRY_BACKOFF_MS * (1L << (attempt - 1)); // 指数退避
-                    logger.warn("服务器错误 ({}), 将在 {}ms 后重试 (尝试 {}/{})", 
-                        e.getStatusCode(), backoffTime, attempt, MAX_RETRY_ATTEMPTS);
-                    try {
-                        Thread.sleep(backoffTime);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        logger.error("重试被中断", ie);
-                        throw new RuntimeException("重试被中断", ie);
-                    }
-                } else {
-                    logger.error("DeepSeek API 服务器错误: {}", e.getStatusCode(), e);
-                    throw e;
-                }
-            } catch (HttpClientErrorException e) {
-                // 客户端错误，不重试
-                logger.error("DeepSeek API 客户端错误: {}", e.getStatusCode(), e);
-                throw e;
-            } catch (Exception e) {
-                // 其他错误，进行重试
-                if (attempt < MAX_RETRY_ATTEMPTS) {
-                    long backoffTime = RETRY_BACKOFF_MS * (1L << (attempt - 1)); // 指数退避
-                    logger.warn("发生意外错误，将在 {}ms 后重试 (尝试 {}/{})", 
-                        backoffTime, attempt, MAX_RETRY_ATTEMPTS);
-                    try {
-                        Thread.sleep(backoffTime);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        logger.error("重试被中断", ie);
-                        throw new RuntimeException("重试被中断", ie);
-                    }
-                } else {
-                    logger.error("DeepSeek API 发生意外错误", e);
-                    throw new RuntimeException("发送请求到 DeepSeek API 失败，已尝试 " + MAX_RETRY_ATTEMPTS + " 次", e);
-                }
-            }
-        }
+            });
     }
 }
