@@ -12,3 +12,4 @@ deepseek:
   model: deepseek-chat
   timeout: 30
   # 注意：api-key 不在此文件配置，由具体环境的配置文件提供
+

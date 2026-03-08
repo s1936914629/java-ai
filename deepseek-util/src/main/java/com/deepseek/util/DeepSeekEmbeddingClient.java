@@ -2,6 +2,7 @@ package com.deepseek.util;
 
 import com.deepseek.config.DeepSeekConfig;
 import com.deepseek.llm.EmbeddingClient;
+import com.deepseek.service.VectorService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -10,7 +11,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DeepSeek Embedding 客户端实现
@@ -19,14 +22,20 @@ import java.util.List;
 @Component
 public class DeepSeekEmbeddingClient extends AbstractDeepSeekClient implements EmbeddingClient {
 
+    private final VectorService vectorService;
+
     /**
      * 构造方法
      * 
      * @param deepSeekConfig DeepSeek 配置
      * @param objectMapper 对象映射器
+     * @param vectorService 向量服务
      */
-    public DeepSeekEmbeddingClient(DeepSeekConfig deepSeekConfig, ObjectMapper objectMapper) {
+    public DeepSeekEmbeddingClient(DeepSeekConfig deepSeekConfig, ObjectMapper objectMapper, VectorService vectorService) {
         super(deepSeekConfig, objectMapper);
+        this.vectorService = vectorService;
+        // 初始化向量集合
+        vectorService.createCollection("embeddings", getEmbeddingDimension());
         logger.info("DeepSeekEmbeddingClient 初始化完成");
     }
 
@@ -36,7 +45,10 @@ public class DeepSeekEmbeddingClient extends AbstractDeepSeekClient implements E
      */
     @Override
     public List<Double> embed(String text) {
-        return embed(deepSeekConfig.getEmbeddingModel(), text);
+        List<Double> embedding = embed(deepSeekConfig.getEmbeddingModel(), text);
+        // 存储向量
+        storeEmbedding(text, embedding);
+        return embedding;
     }
 
     /**
@@ -56,7 +68,10 @@ public class DeepSeekEmbeddingClient extends AbstractDeepSeekClient implements E
      */
     @Override
     public List<List<Double>> embedBatch(List<String> texts) {
-        return embedBatch(deepSeekConfig.getEmbeddingModel(), texts);
+        List<List<Double>> embeddings = embedBatch(deepSeekConfig.getEmbeddingModel(), texts);
+        // 存储批量向量
+        storeBatchEmbeddings(texts, embeddings);
+        return embeddings;
     }
 
     /**
@@ -76,6 +91,62 @@ public class DeepSeekEmbeddingClient extends AbstractDeepSeekClient implements E
         
         HttpEntity<ObjectNode> httpEntity = new HttpEntity<>(requestBody, createHeaders());
         return sendEmbeddingRequest(httpEntity);
+    }
+
+    /**
+     * 存储单个嵌入向量
+     * 
+     * @param text 文本
+     * @param embedding 嵌入向量
+     */
+    private void storeEmbedding(String text, List<Double> embedding) {
+        List<String> texts = Collections.singletonList(text);
+        List<List<Double>> embeddings = Collections.singletonList(embedding);
+        storeBatchEmbeddings(texts, embeddings);
+    }
+
+    /**
+     * 存储批量嵌入向量
+     * 
+     * @param texts 文本列表
+     * @param embeddings 嵌入向量列表
+     */
+    private void storeBatchEmbeddings(List<String> texts, List<List<Double>> embeddings) {
+        if (texts.isEmpty() || embeddings.isEmpty() || texts.size() != embeddings.size()) {
+            return;
+        }
+
+        // 准备数据
+        List<Long> ids = new ArrayList<>();
+        List<List<Float>> vectors = new ArrayList<>();
+        Map<String, List<?>> fields = new HashMap<>();
+        List<String> textList = new ArrayList<>();
+
+        for (int i = 0; i < texts.size(); i++) {
+            ids.add(System.currentTimeMillis() + i);
+            vectors.add(convertDoubleToFloat(embeddings.get(i)));
+            textList.add(texts.get(i));
+        }
+
+        fields.put("text", textList);
+
+        // 存储到 Milvus
+        vectorService.insertVectors("embeddings", ids, vectors, fields);
+        logger.debug("存储了 {} 个嵌入向量到 Milvus", embeddings.size());
+    }
+
+    /**
+     * 将 Double 类型的向量转换为 Float 类型
+     * 
+     * @param doubleVector Double 类型的向量
+     * @return Float 类型的向量
+     */
+    private List<Float> convertDoubleToFloat(List<Double> doubleVector) {
+        List<Float> floatVector = new ArrayList<>();
+        for (Double value : doubleVector) {
+            floatVector.add(value.floatValue());
+        }
+        return floatVector;
     }
 
     /**
